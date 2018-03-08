@@ -21,6 +21,7 @@ class PrepareData():
         # self.create_idx()
 
     def clean_string(self, string):
+        split_ = string.split()
         cleaned_string = ""
         for char in string:
             if char not in punctuation:
@@ -181,6 +182,5 @@ class RNNModel(PrepareData):
 
 if __name__ == '__main__':
     prep = RNNModel()
-    # prep.create_model_and_train()
-    # prep.train_model()
+    prep.train_model()
     prep.test_model()
