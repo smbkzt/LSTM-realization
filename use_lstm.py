@@ -8,7 +8,7 @@ import os
 class TryLstm():
     def __init__(self):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-        self.numDimensions = 50
+        self.numDimensions = 200
         self.maxSeqLength = 30
         self.batchSize = 24
         self.lstmUnits = 64
@@ -54,6 +54,7 @@ class TryLstm():
             inputText = input("Enter the text or 'exit' to quit: ")
             if inputText == "exit":
                 break
+                exit(1)
             inputMatrix = self.getSentenceMatrix(inputText)
             predictedSentiment = sess.run(prediction, {input_data: inputMatrix})[0]
             if (predictedSentiment[0] > predictedSentiment[1]):
@@ -66,18 +67,26 @@ class TryLstm():
                 print(f'{predictedSentiment[0]}/{predictedSentiment[1]}' + "\n")
         exit(1)
 
-    def cleanSentences(self, string):
-        clean = ''
-        for char in string:
-            if char in punctuation:
-                continue
-            clean += char
-        return clean
+    def clean_sentence(self, string):
+        cleaned_string = ''
+        for num, char in enumerate(string):
+            if char == "<":
+                if string[num + 2] == "-" and string[num + 4] == ">":
+                    cleaned_string += char
+            elif char == "-":
+                if string[num - 2] == "<" and string[num + 2] == ">":
+                    cleaned_string += char
+            elif char == ">":
+                if string[num - 4] == "<" and string[num - 2] == "-":
+                    cleaned_string += char
+            elif char not in punctuation:
+                cleaned_string += char
+        return cleaned_string
 
     def getSentenceMatrix(self, sentence):
         arr = np.zeros([self.batchSize, self.maxSeqLength])
         sentenceMatrix = np.zeros([self.batchSize, self.maxSeqLength], dtype='int32')
-        cleanedSentence = self.cleanSentences(sentence)
+        cleanedSentence = self.clean_sentence(sentence)
         split = cleanedSentence.split()
         for indexCounter, word in enumerate(split):
             try:
@@ -91,3 +100,4 @@ class TryLstm():
 if __name__ == '__main__':
     var = TryLstm()
     var.create_model()
+    exit(1)

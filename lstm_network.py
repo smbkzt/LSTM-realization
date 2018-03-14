@@ -18,13 +18,21 @@ class PrepareData():
         self.line_number = 0
         self.load_glove_model()
         self.calculate_lines('data/agreed.polarity', 'data/disagreed.polarity')
-        # self.create_idx()
+        self.create_idx()
 
     def clean_string(self, string):
-        split_ = string.split()
-        cleaned_string = ""
-        for char in string:
-            if char not in punctuation:
+        cleaned_string = ''
+        for num, char in enumerate(string):
+            if char == "<":
+                if string[num + 2] == "-" and string[num + 4] == ">":
+                    cleaned_string += char
+            elif char == "-":
+                if string[num - 2] == "<" and string[num + 2] == ">":
+                    cleaned_string += char
+            elif char == ">":
+                if string[num - 4] == "<" and string[num - 2] == "-":
+                    cleaned_string += char
+            elif char not in punctuation:
                 cleaned_string += char
         return cleaned_string
 
@@ -46,12 +54,12 @@ class PrepareData():
         filesList = [f for f in listdir('data/')
                      if isfile(join('data/', f)) and f.endswith(".polarity")]
         fileCounter = 0
-        hm_lines = 11000
+        hm_lines = 78
         for file in sorted(filesList):
             with open(f"data/{file}", "r", errors='ignore') as f:
                 lines = f.readlines()[:hm_lines]
                 for num, line in enumerate(lines):
-                    if num % 1000 == 0:
+                    if num % 10 == 0:
                         print(num + self.current_state)
                     cleanedLine = self.clean_string(line)
                     split = cleanedLine.split()
@@ -75,8 +83,8 @@ class RNNModel(PrepareData):
         self.batchSize = 24
         self.lstmUnits = 64
         self.numClasses = 2
-        self.iterations = 11000
-        self.numDimensions = 50
+        self.iterations = 2000
+        self.numDimensions = 200
         self.create_model()
 
     def get_train_batch(self):
@@ -84,10 +92,10 @@ class RNNModel(PrepareData):
         arr = np.zeros([self.batchSize, self.maxSeqLength])
         for i in range(self.batchSize):
             if (i % 2 == 0):
-                num = randint(1, 10000)
+                num = randint(1, 60)
                 labels.append([1, 0])  # Agreed
             else:
-                num = randint(12000, 22000)
+                num = randint(97, 156)
                 labels.append([0, 1])  # Disagreed
             arr[i] = self.ids[num-1:num]
         return arr, labels
@@ -96,8 +104,8 @@ class RNNModel(PrepareData):
         labels = []
         arr = np.zeros([self.batchSize, self.maxSeqLength])
         for i in range(self.batchSize):
-            num = randint(10000, 12000)
-            if (num <= 11000):
+            num = randint(78, 96)
+            if (num <= int((78+96)/2)):
                 labels.append([1, 0])
             else:
                 labels.append([0, 1])
@@ -152,7 +160,9 @@ class RNNModel(PrepareData):
         self.optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         tf.summary.scalar('Loss', loss)
+        print('Liss ', loss)
         tf.summary.scalar('Accuracy', self.accuracy)
+        print('Accuracy ', self.accuracy)
         self.merged = tf.summary.merge_all()
         logdir = "tensorboard/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
         self.writer = tf.summary.FileWriter(logdir, self.sess.graph)
@@ -169,12 +179,12 @@ class RNNModel(PrepareData):
                                            self.labels: nextBatchLabels}
                           )
             # Write summary to Tensorboard
-            if (i % 50 == 0):
+            if (i % 100 == 0):
                 summary = self.sess.run(self.merged, {self.input_data: nextBatch, self.labels: nextBatchLabels})
                 self.writer.add_summary(summary, i)
 
             # Save the network every 10,000 training iterations
-            if (i % 1000 == 0 and i != 0):
+            if (i % 100 == 0 and i != 0):
                 save_path = saver.save(self.sess, "models/pretrained_lstm.ckpt", global_step=i)
                 print("Saved to %s" % save_path)
         self.writer.close()
