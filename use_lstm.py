@@ -4,24 +4,27 @@ from string import punctuation
 import re
 import os
 
+import config
+
 
 class TryLstm():
     def __init__(self):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-        self.numDimensions = 200
-        self.maxSeqLength = 30
-        self.batchSize = 24
-        self.lstmUnits = 64
-        self.numClasses = 2
+        self.numDimensions = config.numDimensions
+        self.maxSeqLength = config.maxSeqLength
+        self.batchSize = config.batchSize
+        self.lstmUnits = config.lstmUnits
+        self.numClasses = config.numClasses
         self.load_gloves()
 
     def load_gloves(self):
+        print("Loading gloves model")
         self.wordsList = np.load('model/wordsList.npy').tolist()
-        # Encode words as UTF-8
         self.wordsList = [word for word in self.wordsList]
         self.wordVectors = np.load('model/wordVectors.npy')
 
     def create_model(self):
+        print("Creating LSTM model...")
         tf.reset_default_graph()
 
         labels = tf.placeholder(tf.float32, [self.batchSize, self.numClasses])
@@ -51,19 +54,21 @@ class TryLstm():
         saver.restore(sess, tf.train.latest_checkpoint('models'))
 
         while True:
-            inputText = input("Enter the text or 'exit' to quit: ")
-            if inputText == "exit":
+            original_tweet = input("Enter origin message: ")
+            comment = input("Enter comment message: ")
+            inputText = original_tweet + " < - > " + comment
+            if original_tweet == "exit":
                 break
                 exit(1)
             inputMatrix = self.getSentenceMatrix(inputText)
             predictedSentiment = sess.run(prediction, {input_data: inputMatrix})[0]
             if (predictedSentiment[0] > predictedSentiment[1]):
-                print("---Positive Sentiment---")
-                print('predictedSentiment/Negative')
+                print("---Agreed Sentiment---")
+                print('Agreed/Disagreed')
                 print(f'{predictedSentiment[0]}/{predictedSentiment[1]}' + "\n")
             else:
-                print("---Negative Sentiment---")
-                print('predictedSentiment/Negative\n')
+                print("---Disagreed Sentiment---")
+                print('Agreed/Disagreed')
                 print(f'{predictedSentiment[0]}/{predictedSentiment[1]}' + "\n")
         exit(1)
 

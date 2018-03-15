@@ -9,16 +9,20 @@ from os.path import isfile, join
 import numpy as np
 import tensorflow as tf
 
+import config
+
 
 class PrepareData():
     def __init__(self):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-        self.maxSeqLength = 30
+        self.maxSeqLength = config.maxSeqLength
         self.current_state = 0
-        self.line_number = 0
         self.load_glove_model()
         self.calculate_lines('data/agreed.polarity', 'data/disagreed.polarity')
-        self.create_idx()
+        print("Agreement examples ", self.agr_lines)
+        print("Disagreement examples ", self.dis_lines)
+        self.line_number = self.agr_lines + self.dis_lines
+        # self.create_idx()
 
     def clean_string(self, string):
         cleaned_string = ''
@@ -43,24 +47,27 @@ class PrepareData():
 
     def calculate_lines(self, agreed, dis):
         for file in [agreed, dis]:
-            num_of_lines = 0
             with open(file, 'r') as f:
-                for line in f.readlines():
-                    num_of_lines += 1
-            self.line_number += num_of_lines
+                lines = f.readlines()
+            if "data/agreed.polarity" == file:
+                self.agr_lines = len(lines)
+            else:
+                self.dis_lines = len(lines)
 
     def create_idx(self):
         ids = np.zeros((self.line_number, self.maxSeqLength), dtype='int32')
         filesList = [f for f in listdir('data/')
                      if isfile(join('data/', f)) and f.endswith(".polarity")]
         fileCounter = 0
-        hm_lines = 78
+        # hm_lines = 299
         for file in sorted(filesList):
             with open(f"data/{file}", "r", errors='ignore') as f:
-                lines = f.readlines()[:hm_lines]
+                print(f"Started readinf file - {file}....")
+                lines = f.readlines()
                 for num, line in enumerate(lines):
-                    if num % 10 == 0:
-                        print(num + self.current_state)
+                    if num % 100 == 0:
+                        current_line = num + self.current_state
+                        print(f"Reading line number: {current_line} / {self.line_number}")
                     cleanedLine = self.clean_string(line)
                     split = cleanedLine.split()
                     for w_num, word in enumerate(split):
@@ -71,7 +78,7 @@ class PrepareData():
                             ids[self.current_state + num][w_num] = 000
                         if w_num >= self.maxSeqLength - 1:
                             break
-            self.current_state += hm_lines
+            self.current_state += len(lines)
         np.save('model/idsMatrix', ids)
         print("Saved ids matrix to the 'model/idsMatrix';")
 
@@ -80,11 +87,11 @@ class RNNModel(PrepareData):
     def __init__(self):
         super(RNNModel, self).__init__()
         self.ids = np.load('model/idsMatrix.npy')
-        self.batchSize = 24
-        self.lstmUnits = 64
-        self.numClasses = 2
-        self.iterations = 2000
-        self.numDimensions = 200
+        self.batchSize = config.batchSize
+        self.lstmUnits = config.lstmUnits
+        self.numClasses = config.numClasses
+        self.iterations = 1001
+        self.numDimensions = config.numDimensions
         self.create_model()
 
     def get_train_batch(self):
@@ -92,10 +99,10 @@ class RNNModel(PrepareData):
         arr = np.zeros([self.batchSize, self.maxSeqLength])
         for i in range(self.batchSize):
             if (i % 2 == 0):
-                num = randint(1, 60)
+                num = randint(1, int(self.agr_lines-(self.agr_lines*0.1)))
                 labels.append([1, 0])  # Agreed
             else:
-                num = randint(97, 156)
+                num = randint(int(self.agr_lines + (self.dis_lines*0.1)), int(self.agr_lines + self.dis_lines))
                 labels.append([0, 1])  # Disagreed
             arr[i] = self.ids[num-1:num]
         return arr, labels
@@ -104,8 +111,8 @@ class RNNModel(PrepareData):
         labels = []
         arr = np.zeros([self.batchSize, self.maxSeqLength])
         for i in range(self.batchSize):
-            num = randint(78, 96)
-            if (num <= int((78+96)/2)):
+            num = randint(int(self.agr_lines-(self.agr_lines*0.1)), int(self.agr_lines + (self.dis_lines*0.1)))
+            if (num <= self.agr_lines):
                 labels.append([1, 0])
             else:
                 labels.append([0, 1])
@@ -126,6 +133,7 @@ class RNNModel(PrepareData):
                 print("Average accuracy: ", av_acc)
 
     def create_model(self):
+        print("Creating training model...")
         tf.reset_default_graph()
         self.sess = tf.InteractiveSession()
         self.labels = tf.placeholder(tf.float32, [self.batchSize, self.numClasses])
@@ -160,9 +168,7 @@ class RNNModel(PrepareData):
         self.optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         tf.summary.scalar('Loss', loss)
-        print('Liss ', loss)
         tf.summary.scalar('Accuracy', self.accuracy)
-        print('Accuracy ', self.accuracy)
         self.merged = tf.summary.merge_all()
         logdir = "tensorboard/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
         self.writer = tf.summary.FileWriter(logdir, self.sess.graph)
