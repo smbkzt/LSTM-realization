@@ -19,11 +19,9 @@ class PrepareData():
         self.dataset_path = path
         self.maxSeqLength = config.maxSeqLength
         self.current_state = 0
-        self.agr_lines = 0
-        self.dis_lines = 0
         self.load_glove_model()
         self.calculate_lines()
-        self.create_idx()
+        self.check_idx_matrix()
 
     def clean_string(self, string) -> str:
         cleaned_string = ''
@@ -42,9 +40,9 @@ class PrepareData():
         return cleaned_string
 
     def load_glove_model(self):
-        self.wordsList = np.load('model/wordsList.npy')
+        self.wordsList = np.load('data/wordsList.npy')
         self.wordsList = self.wordsList.tolist()
-        self.wordVectors = np.load('model/wordVectors.npy')
+        self.wordVectors = np.load('data/wordVectors.npy')
 
     def calculate_lines(self) -> str:
         # Get the list of all files in folder
@@ -62,8 +60,23 @@ class PrepareData():
         print("Disagreement examples ", self.dis_lines)
         self.line_number = self.agr_lines + self.dis_lines
 
+    def check_idx_matrix(self):
+        idsMatrix = [self.dataset_path + f for f in listdir(self.dataset_path)
+                     if isfile(join(self.dataset_path, f)) and
+                     f.endswith("idsMatrix.npy")]
+        if len(idsMatrix) >= 1:
+            ans = input("Found 'idsMatrix'. Would you like to recreate it?y/n ")
+            if ans in ["y", "", "Yes", "Y"]:
+                self.create_idx()
+            else:
+                print("Continue...")
+        else:
+            print("Haven't found the idx matrix models.")
+            self.create_idx()
+
     def create_idx(self):
-        ids = np.zeros((self.line_number, self.maxSeqLength), dtype='int32')
+        ids = np.zeros((self.line_number, self.maxSeqLength),
+                       dtype='int32')
         for file in sorted(self.filesList):
             with open(f"{file}", "r", errors='ignore') as f:
                 print(f"\nStarted reading file - {file}....")
@@ -82,19 +95,19 @@ class PrepareData():
                             ids[self.current_state + num][w_num] = 000
                         if w_num >= self.maxSeqLength - 1:
                             break
-            self.current_state += len(lines)  # To continue from "checkpoint"
-
-        np.save('model/idsMatrix', ids)
+            # To continue from "checkpoint"
+            self.current_state += len(lines)
+        np.save('data/idsMatrix', ids)
         print("Saved ids matrix to the 'model/idsMatrix';")
 
 
 class RNNModel(PrepareData):
     def __init__(self, path="uknown"):
         dir_path = path
+        print(dir_path)
         if not dir_path == "uknown":
             super(RNNModel, self).__init__(dir_path)
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
-        self.ids = np.load('model/idsMatrix.npy')
         self.batchSize = config.batchSize
         self.lstmUnits = config.lstmUnits
         self.numClasses = config.numClasses
@@ -103,6 +116,7 @@ class RNNModel(PrepareData):
 
     def get_train_batch(self):
         '''Returning training batch function'''
+        self.ids = np.load('data/idsMatrix.npy')
         labels = []
         arr = np.zeros([self.batchSize, self.maxSeqLength])
         for i in range(self.batchSize):
@@ -118,6 +132,7 @@ class RNNModel(PrepareData):
 
     def get_test_batch(self):
         '''Returning training batch function'''
+        self.ids = np.load('data/idsMatrix.npy')
         with open("data/agreed.polarity") as f:
             agr_lines = len(f.readlines())
         with open("data/disagreed.polarity") as f:
@@ -181,14 +196,15 @@ class RNNModel(PrepareData):
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
                               logits=prediction, labels=labels)
                               )
-        optimizer = tf.train.AdamOptimizer().minimize(loss)
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
 
         tf.summary.scalar('Loss', loss)
         tf.summary.scalar('Accuracy', accuracy)
 
         # ------ Below is training process ---------
         merged = tf.summary.merge_all()
-        logdir = "tensorboard/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+        logdir = "tensorboard/" + \
+                 datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
         writer = tf.summary.FileWriter(logdir, sess.graph)
 
         saver = tf.train.Saver()

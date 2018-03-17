@@ -17,7 +17,7 @@ class TryLstm():
 
     def load_gloves(self):
         print("Loading gloves model...")
-        self.wordsList = np.load('model/wordsList.npy').tolist()
+        self.wordsList = np.load('data/wordsList.npy').tolist()
         self.wordsList = [word for word in self.wordsList]
 
     def restore_models(self):
@@ -25,7 +25,8 @@ class TryLstm():
         self.sess = tf.Session()
 
         # Restoring the meta and latest model
-        saver = tf.train.import_meta_graph('models/pretrained_lstm.ckpt-1001.meta')
+        path = ".".join([tf.train.latest_checkpoint("models/"), "meta"])
+        saver = tf.train.import_meta_graph(path)
         saver.restore(self.sess, tf.train.latest_checkpoint('models/'))
 
         # Restoring the tf variables
@@ -38,10 +39,13 @@ class TryLstm():
                                            {self.input_data: inputMatrix}
                                            )[0]
         if (predictedSentiment[0] > predictedSentiment[1]):
-            print("---The message has agreement sentiment---")
+            print("|----------------------------------------------------|")
+            print("|---The comment message has agreement sentiment------|")
+            print("|----------------------------------------------------|")
         else:
-            print("---The message has disagreement sentiment---")
-
+            print("|----------------------------------------------------|")
+            print("|---The comment message has disagreement sentiment---|")
+            print("|----------------------------------------------------|")
         print(f"Agreement coefficient:",
               "{0:.2f}".format(predictedSentiment[0]))
         print(f"Disagreement coefficient:",
@@ -84,11 +88,11 @@ if __name__ == '__main__':
     var = TryLstm()
     try:
         while True:
-            original_tweet = input("\nEnter origin message: ")
+            original_tweet = input("\n---Enter origin message: ")
             if original_tweet == "exit":
                 var.sess.close()
                 exit(1)
-            comment = input("Enter comment message: ")
+            comment = input("---Enter comment message: ")
             inputText = original_tweet + " < - > " + comment
             var.predict(inputText)
     except Exception:
