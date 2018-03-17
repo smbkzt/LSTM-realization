@@ -15,10 +15,8 @@ To use this app you need:
 pip3.6 install -r req.txt
 ```
 
-## Download Glove model and put them into 'model/' folder;
-```
-[https://nlp.stanford.edu/projects/glove/](Glove Model)
-```
+## Download Glove model:
+You can download GloVe models from [stanford.edu](https://nlp.stanford.edu/projects/glove).
 
 ## Train data
 Put train data into 'data/' folder with .polarity extension;
