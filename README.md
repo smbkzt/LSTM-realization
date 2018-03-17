@@ -21,16 +21,16 @@ pip3.6 install -r req.txt
 ```
 
 ## Train data
-Put train data into 'data/' folder;
+Put train data into 'data/' folder with .polarity extension;
 
 ## Use
 
-### To train and test model use:
+### To train model use:
 ```
-python3.6 lstm_network.py
+python3.6 train_and_test.py --train='data/'
 ```
 
-### To test NN in realtime:
+### To test pre-trained model:
 ```
-python3.6 use_lstm.py
+python3.6 train_and_test.py --test='models/'
 ```
