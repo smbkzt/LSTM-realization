@@ -109,7 +109,6 @@ class RNNModel(PrepareData):
     """Class of TF models creation"""
     def __init__(self, path="uknown"):
         dir_path = path
-        print(dir_path)
         if not dir_path == "uknown":
             super(RNNModel, self).__init__(dir_path)
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
@@ -155,7 +154,7 @@ class RNNModel(PrepareData):
             arr[i] = self.ids[num-1:num]
         return arr, labels
 
-    def create_and_test_model(self):
+    def create_and_train_model(self):
         """Creates the TF model"""
         print("Creating training model...")
         tf.reset_default_graph()
@@ -174,12 +173,16 @@ class RNNModel(PrepareData):
                                      self.numDimensions]), dtype=tf.float32)
 
         data = tf.nn.embedding_lookup(self.wordVectors, input_data)
-        lstmCell = tf.contrib.rnn.BasicLSTMCell(self.lstmUnits)
-        lstmCell = tf.contrib.rnn.DropoutWrapper(
-            cell=lstmCell,
-            output_keep_prob=0.75
-        )
-        value, _ = tf.nn.dynamic_rnn(lstmCell, data, dtype=tf.float32)
+        cells = []
+        for _ in range(config.cells):
+            lstmCell = tf.contrib.rnn.BasicLSTMCell(self.lstmUnits)
+            lstmCell = tf.contrib.rnn.DropoutWrapper(
+                cell=lstmCell,
+                output_keep_prob=0.75
+            )
+            cells.append(lstmCell)
+        cell = tf.contrib.rnn.MultiRNNCell(cells)
+        value, _ = tf.nn.dynamic_rnn(cell, data, dtype=tf.float32)
 
         weight = tf.Variable(tf.truncated_normal(
             [self.lstmUnits,
@@ -205,9 +208,9 @@ class RNNModel(PrepareData):
 
         tf.summary.scalar('Loss', loss)
         tf.summary.scalar('Accuracy', accuracy)
+        merged = tf.summary.merge_all()
 
         # ------ Below is training process ---------
-        merged = tf.summary.merge_all()
         logdir = "tensorboard/" + \
                  datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
         writer = tf.summary.FileWriter(logdir, sess.graph)
@@ -229,13 +232,12 @@ class RNNModel(PrepareData):
                                     labels: nextBatchLabels}
                                    )
                 writer.add_summary(summary, i)
-
             # Save the network every 10,000 training iterations
-            if (i % 1000 == 0 and i != 0):
-                save_path = saver.save(sess,
-                                       "models/pretrained_lstm.ckpt",
-                                       global_step=i)
-                print(f"Saved to {save_path}")
+            # if (i % 1000 == 0 and i != 0):
+            #     save_path = saver.save(sess,
+            #                            "models/pretrained_lstm.ckpt",
+            #                            global_step=i)
+            #     print(f"Saved to {save_path}")
 
         save_path = saver.save(sess, "models/pretrained_lstm.ckpt",
                                global_step=config.training_steps)
@@ -267,7 +269,8 @@ class RNNModel(PrepareData):
                 if i > 0:
                     accuracy_int += cur_acc
                     av_acc = accuracy_int / i
-                    print(f"Curr/Avg accuracy:{int(cur_acc)}/{int(av_acc)}")
+                    print("Test batch #", i,
+                          f"Curr/Avg accuracy:{int(cur_acc)}/{int(av_acc)}")
 
 
 if __name__ == '__main__':
@@ -277,7 +280,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.train:
         train = RNNModel(args.train)
-        train.create_and_test_model()
+        train.create_and_train_model()
     elif args.test:
         test = RNNModel()
         test.test_model(args.test)
