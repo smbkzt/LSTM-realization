@@ -1,8 +1,9 @@
-import numpy as np
-import tensorflow as tf
-from string import punctuation
 import re
 import os
+from string import punctuation
+
+import numpy as np
+import tensorflow as tf
 
 import config
 

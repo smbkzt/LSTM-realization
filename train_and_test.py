@@ -2,7 +2,6 @@ import os
 import pickle
 import datetime
 import argparse
-
 from os import listdir
 from random import randint
 from string import punctuation
@@ -15,6 +14,7 @@ import config
 
 
 class PrepareData():
+    """Preparing dataset to be inputed in TF"""
     def __init__(self, path):
         self.dataset_path = path
         self.maxSeqLength = config.maxSeqLength
@@ -24,6 +24,7 @@ class PrepareData():
         self.check_idx_matrix()
 
     def clean_string(self, string) -> str:
+        """Cleans messages from punctuation"""
         cleaned_string = ''
         for num, char in enumerate(string):
             if char == "<":
@@ -40,6 +41,7 @@ class PrepareData():
         return cleaned_string
 
     def load_glove_model(self):
+        """Loads the glove model"""
         self.wordsList = np.load('data/wordsList.npy')
         self.wordsList = self.wordsList.tolist()
         self.wordVectors = np.load('data/wordVectors.npy')
@@ -61,6 +63,7 @@ class PrepareData():
         self.line_number = self.agr_lines + self.dis_lines
 
     def check_idx_matrix(self):
+        """Checks if any idx matrix exists"""
         idsMatrix = [self.dataset_path + f for f in listdir(self.dataset_path)
                      if isfile(join(self.dataset_path, f)) and
                      f.endswith("idsMatrix.npy")]
@@ -75,6 +78,7 @@ class PrepareData():
             self.create_idx()
 
     def create_idx(self):
+        """Function of idx creation"""
         ids = np.zeros((self.line_number, self.maxSeqLength),
                        dtype='int32')
         for file in sorted(self.filesList):
@@ -102,6 +106,7 @@ class PrepareData():
 
 
 class RNNModel(PrepareData):
+    """Class of TF models creation"""
     def __init__(self, path="uknown"):
         dir_path = path
         print(dir_path)
@@ -151,7 +156,7 @@ class RNNModel(PrepareData):
         return arr, labels
 
     def create_and_test_model(self):
-        """Creates the tf model"""
+        """Creates the TF model"""
         print("Creating training model...")
         tf.reset_default_graph()
         sess = tf.InteractiveSession()
@@ -259,8 +264,8 @@ class RNNModel(PrepareData):
                                    {input_data: nextBatch,
                                     labels: nextBatchLabels}
                                    ) * 100
-                accuracy_int += cur_acc
                 if i > 0:
+                    accuracy_int += cur_acc
                     av_acc = accuracy_int / i
                     print(f"Curr/Avg accuracy:{int(cur_acc)}/{int(av_acc)}")
 
