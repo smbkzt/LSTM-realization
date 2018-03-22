@@ -1,4 +1,4 @@
-numDimensions = 100
+numDimensions = 50
 maxSeqLength = 70
 batchSize = 20
 lstmUnits = 12

@@ -1,5 +1,4 @@
 import os
-import pickle
 import datetime
 import argparse
 from os import listdir
@@ -15,6 +14,7 @@ import config
 
 class PrepareData():
     """Preparing dataset to be inputed in TF"""
+
     def __init__(self, path):
         self.dataset_path = path
         self.maxSeqLength = config.maxSeqLength
@@ -89,12 +89,12 @@ class PrepareData():
                     if num % 100 == 0:
                         current_line = num + self.current_state
                         print(f"Reading line number: {current_line}/{self.line_number}")
-                    cleanedLine = self.clean_string(line)
-                    split = cleanedLine.split()
+                    cleaned_line = self.clean_string(line)
+                    split = cleaned_line.split()
                     for w_num, word in enumerate(split):
                         try:
-                            getWordIndex = self.wordsList.index(word)
-                            ids[self.current_state + num][w_num] = getWordIndex
+                            get_word_index = self.wordsList.index(word)
+                            ids[self.current_state + num][w_num] = get_word_index
                         except ValueError:
                             ids[self.current_state + num][w_num] = 000
                         if w_num >= self.maxSeqLength - 1:
@@ -107,11 +107,15 @@ class PrepareData():
 
 class RNNModel(PrepareData):
     """Class of TF models creation"""
+
     def __init__(self, path="uknown"):
         dir_path = path
         if not dir_path == "uknown":
             super(RNNModel, self).__init__(dir_path)
+
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
+
+        self.ids = np.load('data/idsMatrix.npy')
         self.batchSize = config.batchSize
         self.lstmUnits = config.lstmUnits
         self.numClasses = config.numClasses
@@ -119,23 +123,22 @@ class RNNModel(PrepareData):
         self.maxSeqLength = config.maxSeqLength
 
     def get_train_batch(self):
-        '''Returning training batch function'''
-        self.ids = np.load('data/idsMatrix.npy')
+        """Returning training batch function"""
         labels = []
         arr = np.zeros([self.batchSize, self.maxSeqLength])
         for i in range(self.batchSize):
-            if (i % 2 == 0):
-                num = randint(1, int(self.agr_lines-(self.agr_lines*0.1)))
+            if i % 2 == 0:
+                num = randint(1, int(self.agr_lines - (self.agr_lines * 0.1)))
                 labels.append([1, 0])  # Agreed
             else:
-                num = randint(int(self.agr_lines + (self.dis_lines*0.1)),
+                num = randint(int(self.agr_lines + (self.dis_lines * 0.1)),
                               int(self.agr_lines + self.dis_lines))
                 labels.append([0, 1])  # Disagreed
-            arr[i] = self.ids[num-1:num]
+            arr[i] = self.ids[num - 1:num]
         return arr, labels
 
     def get_test_batch(self):
-        '''Returning training batch function'''
+        """Returning training batch function"""
         self.ids = np.load('data/idsMatrix.npy')
         with open("data/agreed.polarity") as f:
             agr_lines = len(f.readlines())
@@ -143,15 +146,15 @@ class RNNModel(PrepareData):
             dis_lines = len(f.readlines())
         labels = []
         arr = np.zeros([self.batchSize, self.maxSeqLength])
-        from_line = int(agr_lines-(agr_lines*0.1))
-        to_line = int(agr_lines + (dis_lines*0.1))
+        from_line = int(agr_lines - (agr_lines * 0.1))
+        to_line = int(agr_lines + (dis_lines * 0.1))
         for i in range(self.batchSize):
             num = randint(from_line, to_line)
-            if (num <= agr_lines):
+            if num <= agr_lines:
                 labels.append([1, 0])  # Agreed
             else:
                 labels.append([0, 1])  # Disagreed
-            arr[i] = self.ids[num-1:num]
+            arr[i] = self.ids[num - 1:num]
         return arr, labels
 
     def create_and_train_model(self):
@@ -175,12 +178,12 @@ class RNNModel(PrepareData):
         data = tf.nn.embedding_lookup(self.wordVectors, input_data)
         cells = []
         for _ in range(config.cells):
-            lstmCell = tf.contrib.rnn.BasicLSTMCell(self.lstmUnits)
-            lstmCell = tf.contrib.rnn.DropoutWrapper(
-                cell=lstmCell,
+            lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.lstmUnits)
+            lstm_cell = tf.contrib.rnn.DropoutWrapper(
+                cell=lstm_cell,
                 output_keep_prob=0.75
             )
-            cells.append(lstmCell)
+            cells.append(lstm_cell)
         cell = tf.contrib.rnn.MultiRNNCell(cells)
         value, _ = tf.nn.dynamic_rnn(cell, data, dtype=tf.float32)
 
@@ -196,14 +199,14 @@ class RNNModel(PrepareData):
         # Here we are doing the same
         tf.add_to_collection("prediction", prediction)
 
-        correctPred = tf.equal(tf.argmax(prediction, 1),
-                               tf.argmax(labels, 1))
-        accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
+        correct_pred = tf.equal(tf.argmax(prediction, 1),
+                                tf.argmax(labels, 1))
+        accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
         tf.add_to_collection("accuracy", accuracy)
 
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-                              logits=prediction, labels=labels)
-                              )
+            logits=prediction, labels=labels)
+        )
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
 
         tf.summary.scalar('Loss', loss)
@@ -211,9 +214,9 @@ class RNNModel(PrepareData):
         merged = tf.summary.merge_all()
 
         # ------ Below is training process ---------
-        logdir = "tensorboard/" + \
-                 datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
-        writer = tf.summary.FileWriter(logdir, sess.graph)
+        log_dir = "tensorboard/" + \
+                  datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+        writer = tf.summary.FileWriter(log_dir, sess.graph)
 
         saver = tf.train.Saver()
         sess.run(tf.global_variables_initializer())
@@ -225,7 +228,7 @@ class RNNModel(PrepareData):
                                  labels: nextBatchLabels}
                      )
             # Write summary to Tensorboard
-            if (i % 100 == 0):
+            if i % 100 == 0:
                 print("Iterations: ", i)
                 summary = sess.run(merged,
                                    {input_data: nextBatch,
@@ -239,8 +242,8 @@ class RNNModel(PrepareData):
             #                            global_step=i)
             #     print(f"Saved to {save_path}")
 
-        save_path = saver.save(sess, "models/pretrained_lstm.ckpt",
-                               global_step=config.training_steps)
+        saver.save(sess, "models/pretrained_lstm.ckpt",
+                   global_step=config.training_steps)
         writer.close()
         sess.close()
 
@@ -259,7 +262,6 @@ class RNNModel(PrepareData):
 
             iterations = 100
             accuracy_int = 0
-            av_acc = 1
             for i in range(iterations):
                 nextBatch, nextBatchLabels = self.get_test_batch()
                 cur_acc = sess.run(accuracy,
