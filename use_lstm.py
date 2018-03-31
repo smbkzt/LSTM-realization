@@ -1,4 +1,3 @@
-import re
 import os
 from string import punctuation
 
@@ -71,7 +70,6 @@ class TryLstm():
         return cleaned_string
 
     def getSentenceMatrix(self, sentence):
-        arr = np.zeros([self.batchSize, self.maxSeqLength])
         sentenceMatrix = np.zeros([self.batchSize, self.maxSeqLength],
                                   dtype='int32')
         cleanedSentence = self.clean_sentence(sentence)
@@ -96,7 +94,7 @@ if __name__ == '__main__':
             comment = input("---Enter comment message: ")
             inputText = original_tweet + " < - > " + comment
             var.predict(inputText)
-    except Exception:
+    except Exception as e:
         print("Exception occurred: ", e)
     finally:
         # Close the session and exit the code in the end
