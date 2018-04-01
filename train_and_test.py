@@ -19,12 +19,11 @@ class PrepareData():
         self.dataset_path = path
         self.maxSeqLength = config.maxSeqLength
         self.current_state = 0
-        self.load_glove_model()
-        self.calculate_lines()
         self.check_idx_matrix()
 
     def clean_string(self, string) -> str:
         """Cleans messages from punctuation"""
+        string = string.lower()
         cleaned_string = ''
         for num, char in enumerate(string):
             if char == "<":
@@ -44,11 +43,11 @@ class PrepareData():
         """Loads the glove model"""
         self.wordsList = np.load('data/wordsList.npy')
         self.wordsList = self.wordsList.tolist()
-        self.wordVectors = np.load('data/wordVectors.npy')
 
     def calculate_lines(self) -> str:
         # Get the list of all files in folder
-        self.filesList = [self.dataset_path + f for f in listdir(self.dataset_path)
+        self.filesList = [self.dataset_path + f for f
+                          in listdir(self.dataset_path)
                           if isfile(join(self.dataset_path, f)) and
                           f.endswith(".polarity")]
         for file in self.filesList:
@@ -64,11 +63,16 @@ class PrepareData():
 
     def check_idx_matrix(self):
         """Checks if any idx matrix exists"""
+        self.calculate_lines()
+        rnn = RNNModel()
+        rnn.agr_lines = self.agr_lines
+        rnn.dis_lines = self.dis_lines
         idsMatrix = [self.dataset_path + f for f in listdir(self.dataset_path)
                      if isfile(join(self.dataset_path, f)) and
                      f.endswith("idsMatrix.npy")]
         if len(idsMatrix) >= 1:
-            ans = input("Found 'idsMatrix'. Would you like to recreate it?y/n ")
+            ans = input(
+                "Found 'idsMatrix'. Would you like to recreate it? (y/n)")
             if ans in ["y", "", "Yes", "Y"]:
                 self.create_idx()
             else:
@@ -76,9 +80,11 @@ class PrepareData():
         else:
             print("Haven't found the idx matrix models.")
             self.create_idx()
+        rnn.create_and_train_model()
 
     def create_idx(self):
         """Function of idx creation"""
+        self.load_glove_model()
         ids = np.zeros((self.line_number, self.maxSeqLength),
                        dtype='int32')
         for file in sorted(self.filesList):
@@ -88,7 +94,9 @@ class PrepareData():
                 for num, line in enumerate(lines):
                     if num % 100 == 0:
                         current_line = num + self.current_state
-                        print(f"Reading line number: {current_line}/{self.line_number}")
+                        print(
+                            f"Reading line number: \
+                            {current_line}/{self.line_number}")
                     cleaned_line = self.clean_string(line)
                     split = cleaned_line.split()
                     for w_num, word in enumerate(split):
@@ -105,22 +113,17 @@ class PrepareData():
         print("Saved ids matrix to the 'model/idsMatrix';")
 
 
-class RNNModel(PrepareData):
+class RNNModel():
     """Class of TF models creation"""
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
 
-    def __init__(self, path="uknown"):
-        dir_path = path
-        if not dir_path == "uknown":
-            super(RNNModel, self).__init__(dir_path)
-
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
-
-        self.ids = np.load('data/idsMatrix.npy')
+    def __init__(self):
         self.batchSize = config.batchSize
         self.lstmUnits = config.lstmUnits
         self.numClasses = config.numClasses
         self.numDimensions = config.numDimensions
         self.maxSeqLength = config.maxSeqLength
+        self.wordVectors = np.load('data/wordVectors.npy')
 
     def get_train_batch(self):
         """Returning training batch function"""
@@ -139,7 +142,6 @@ class RNNModel(PrepareData):
 
     def get_test_batch(self):
         """Returning training batch function"""
-        self.ids = np.load('data/idsMatrix.npy')
         with open("data/agreed.polarity") as f:
             agr_lines = len(f.readlines())
         with open("data/disagreed.polarity") as f:
@@ -159,6 +161,7 @@ class RNNModel(PrepareData):
 
     def create_and_train_model(self):
         """Creates the TF model"""
+        self.ids = np.load('data/idsMatrix.npy')
         print("Creating training model...")
         tf.reset_default_graph()
         sess = tf.InteractiveSession()
@@ -249,6 +252,7 @@ class RNNModel(PrepareData):
 
     def test_model(self, dir_):
         # Starting the session
+        self.ids = np.load('data/idsMatrix.npy')
         with tf.Session() as sess:
             path = ".".join([tf.train.latest_checkpoint(dir_), "meta"])
             # Get collections
@@ -281,8 +285,7 @@ if __name__ == '__main__':
     parser.add_argument("--test", help="Test trained model")
     args = parser.parse_args()
     if args.train:
-        train = RNNModel(args.train)
-        train.create_and_train_model()
+        train = PrepareData(args.train)
     elif args.test:
         test = RNNModel()
         test.test_model(args.test)

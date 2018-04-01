@@ -19,6 +19,8 @@ class PrepareData():
         self.dataset_path = path
         self.maxSeqLength = config.maxSeqLength
         self.current_state = 0
+        self.load_glove_model()
+        self.calculate_lines()
         self.check_idx_matrix()
 
     def clean_string(self, string) -> str:
@@ -42,6 +44,7 @@ class PrepareData():
         """Loads the glove model"""
         self.wordsList = np.load('data/wordsList.npy')
         self.wordsList = self.wordsList.tolist()
+        self.wordVectors = np.load('data/wordVectors.npy')
 
     def calculate_lines(self) -> str:
         # Get the list of all files in folder
@@ -61,10 +64,6 @@ class PrepareData():
 
     def check_idx_matrix(self):
         """Checks if any idx matrix exists"""
-        self.calculate_lines()
-        rnn = RNNModel()
-        rnn.agr_lines = self.agr_lines
-        rnn.dis_lines = self.dis_lines
         idsMatrix = [self.dataset_path + f for f in listdir(self.dataset_path)
                      if isfile(join(self.dataset_path, f)) and
                      f.endswith("idsMatrix.npy")]
@@ -72,18 +71,14 @@ class PrepareData():
             ans = input("Found 'idsMatrix'. Would you like to recreate it?y/n ")
             if ans in ["y", "", "Yes", "Y"]:
                 self.create_idx()
-                rnn.create_and_train_model()
             else:
                 print("Continue...")
-                rnn.create_and_train_model()
         else:
             print("Haven't found the idx matrix models.")
             self.create_idx()
-            rnn.create_and_train_model()
 
     def create_idx(self):
         """Function of idx creation"""
-        self.load_glove_model()
         ids = np.zeros((self.line_number, self.maxSeqLength),
                        dtype='int32')
         for file in sorted(self.filesList):
@@ -110,18 +105,22 @@ class PrepareData():
         print("Saved ids matrix to the 'model/idsMatrix';")
 
 
-class RNNModel:
+class RNNModel(PrepareData):
     """Class of TF models creation"""
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
 
-    def __init__(self):
+    def __init__(self, path="uknown"):
+        dir_path = path
+        if not dir_path == "uknown":
+            super(RNNModel, self).__init__(dir_path)
+
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
+
         self.ids = np.load('data/idsMatrix.npy')
         self.batchSize = config.batchSize
         self.lstmUnits = config.lstmUnits
         self.numClasses = config.numClasses
         self.numDimensions = config.numDimensions
         self.maxSeqLength = config.maxSeqLength
-        self.wordVectors = np.load('data/wordVectors.npy')
 
     def get_train_batch(self):
         """Returning training batch function"""
@@ -282,7 +281,8 @@ if __name__ == '__main__':
     parser.add_argument("--test", help="Test trained model")
     args = parser.parse_args()
     if args.train:
-        train = PrepareData(args.train)
+        train = RNNModel(args.train)
+        train.create_and_train_model()
     elif args.test:
         test = RNNModel()
         test.test_model(args.test)
