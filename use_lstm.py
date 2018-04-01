@@ -52,6 +52,7 @@ class TryLstm():
               "{0:.2f}".format(predictedSentiment[1]))
 
     def clean_sentence(self, string):
+        string = string.lower()
         cleaned_string = ''
         for num, char in enumerate(string):
             # Ignoring the "< - >"" statement
