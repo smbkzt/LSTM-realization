@@ -1,6 +1,10 @@
 import os
+import re
 import datetime
 import argparse
+import requests
+from lxml.html import fromstring
+
 from os import listdir
 from random import randint
 from string import punctuation
@@ -10,6 +14,8 @@ import numpy as np
 import tensorflow as tf
 
 import config
+
+requests.packages.urllib3.disable_warnings()
 
 
 class PrepareData():
@@ -22,7 +28,22 @@ class PrepareData():
         self.check_idx_matrix()
 
     def clean_string(self, string) -> str:
-        """Cleans messages from punctuation"""
+        """Cleans messages from punctuation and mentions"""
+        string = re.sub(r"@[A-Za-z0-9]+", "", string)
+        url = re.search('https?://[A-Za-z0-9./]+', string)
+        if url:
+            if len(string) < 50:
+                try:
+                    reponse = requests.get(url.group(0), verify=False)
+                    tree = fromstring(reponse.content)
+                    title = tree.findtext('.//title')
+                    string = re.sub('https?://[A-Za-z0-9./]+',
+                                    f' {title} ',
+                                    string)
+                except Exception as error:
+                    print(error)
+            else:
+                string = re.sub('https?://[A-Za-z0-9./]+', '', string)
         string = string.lower()
         cleaned_string = ''
         for num, char in enumerate(string):
@@ -102,7 +123,8 @@ class PrepareData():
                     for w_num, word in enumerate(split):
                         try:
                             get_word_index = self.wordsList.index(word)
-                            ids[self.current_state + num][w_num] = get_word_index
+                            ids[self.current_state + num][w_num] = \
+                                get_word_index
                         except ValueError:
                             ids[self.current_state + num][w_num] = 000
                         if w_num >= self.maxSeqLength - 1:

@@ -1,6 +1,9 @@
 import os
+import re
 from string import punctuation
 
+import requests
+from lxml.html import fromstring
 import numpy as np
 import tensorflow as tf
 
@@ -52,6 +55,22 @@ class TryLstm():
               "{0:.2f}".format(predictedSentiment[1]))
 
     def clean_sentence(self, string):
+        """Cleans sentence from punctuation marks and mentions"""
+        string = re.sub(r"@[A-Za-z0-9]+", "", string)  # Cleans from mentions
+        url = re.search('https?://[A-Za-z0-9./]+', string)
+        if url:
+            if len(string) < 50:
+                try:
+                    reponse = requests.get(url.group(0), verify=False)
+                    tree = fromstring(reponse.content)
+                    title = tree.findtext('.//title')
+                    string = re.sub('https?://[A-Za-z0-9./]+',
+                                    f' {title} ',
+                                    string)
+                except Exception as error:
+                    print(error)
+            else:
+                string = re.sub('https?://[A-Za-z0-9./]+', '', string)
         string = string.lower()
         cleaned_string = ''
         for num, char in enumerate(string):

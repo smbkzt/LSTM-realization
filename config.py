@@ -1,7 +1,7 @@
 numDimensions = 100
-maxSeqLength = 70
+maxSeqLength = 100
 batchSize = 20
-lstmUnits = 12
+lstmUnits = 128
 numClasses = 2
-training_steps = 2200
-cells = 4
+training_steps = 2300
+cells = 1
