@@ -1,13 +1,10 @@
 import os
-import re
-from string import punctuation
 
-import requests
-from lxml.html import fromstring
 import numpy as np
 import tensorflow as tf
 
 import config
+from train_and_test import PrepareData
 
 
 class TryLstm():
@@ -54,45 +51,10 @@ class TryLstm():
         print(f"Disagreement coefficient:",
               "{0:.2f}".format(predictedSentiment[1]))
 
-    def clean_sentence(self, string):
-        """Cleans sentence from punctuation marks and mentions"""
-        string = re.sub(r"@[A-Za-z0-9]+", "", string)  # Cleans from mentions
-        url = re.search('https?://[A-Za-z0-9./]+', string)
-        if url:
-            if len(string) < 50:
-                try:
-                    reponse = requests.get(url.group(0), verify=False)
-                    tree = fromstring(reponse.content)
-                    title = tree.findtext('.//title')
-                    string = re.sub('https?://[A-Za-z0-9./]+',
-                                    f' {title} ',
-                                    string)
-                except Exception as error:
-                    print(error)
-            else:
-                string = re.sub('https?://[A-Za-z0-9./]+', '', string)
-        string = string.lower()
-        cleaned_string = ''
-        for num, char in enumerate(string):
-            # Ignoring the "< - >"" statement
-            if char == "<":
-                if string[num + 2] == "-" and string[num + 4] == ">":
-                    cleaned_string += char
-            elif char == "-":
-                if string[num - 2] == "<" and string[num + 2] == ">":
-                    cleaned_string += char
-            elif char == ">":
-                if string[num - 4] == "<" and string[num - 2] == "-":
-                    cleaned_string += char
-            # Deleting the punctuation marks
-            elif char not in punctuation:
-                cleaned_string += char
-        return cleaned_string
-
     def getSentenceMatrix(self, sentence):
         sentenceMatrix = np.zeros([self.batchSize, self.maxSeqLength],
                                   dtype='int32')
-        cleanedSentence = self.clean_sentence(sentence)
+        cleanedSentence = PrepareData.clean_string(sentence)
         split = cleanedSentence.split()
         for indexCounter, word in enumerate(split):
             try:

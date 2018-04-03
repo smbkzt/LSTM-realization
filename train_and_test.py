@@ -27,7 +27,8 @@ class PrepareData():
         self.current_state = 0
         self.check_idx_matrix_occurance()
 
-    def clean_string(self, string: str) -> str:
+    @staticmethod
+    def clean_string(string: str) -> str:
         """Cleans messages from punctuation and mentions"""
         string = re.sub(r"@[A-Za-z0-9]+", "", string)  # Delete tweet mentions
         # tweets = string.split(" < - > ")
@@ -299,20 +300,15 @@ class RNNModel():
 
             saver.restore(sess, tf.train.latest_checkpoint(dir_))
             print("Testing pre-trained model....")
-
-            iterations = 100
-            accuracy_int = 0
-            for i in range(iterations):
+            test_acc = []
+            for i in range(120):
                 nextBatch, nextBatchLabels = self.get_test_batch()
                 cur_acc = sess.run(accuracy,
                                    {input_data: nextBatch,
                                     labels: nextBatchLabels}
                                    ) * 100
-                if i > 0:
-                    accuracy_int += cur_acc
-                    av_acc = accuracy_int / i
-                    print("Test batch #", i,
-                          f"Curr/Avg accuracy:{int(cur_acc)}/{int(av_acc)}")
+                test_acc.append(cur_acc)
+            print("Test accuracy: {:.3f}".format(np.mean(test_acc)))
 
 
 if __name__ == '__main__':
