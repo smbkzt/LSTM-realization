@@ -3,7 +3,7 @@ import re
 import datetime
 import argparse
 import requests
-from lxml.html import fromstring
+# from lxml.html import fromstring
 
 from os import listdir
 from random import randint
@@ -21,29 +21,34 @@ requests.packages.urllib3.disable_warnings()
 class PrepareData():
     """Preparing dataset to be inputed in TF"""
 
-    def __init__(self, path):
+    def __init__(self, path: str):
         self.dataset_path = path
         self.maxSeqLength = config.maxSeqLength
         self.current_state = 0
-        self.check_idx_matrix()
+        self.check_idx_matrix_occurance()
 
-    def clean_string(self, string) -> str:
+    def clean_string(self, string: str) -> str:
         """Cleans messages from punctuation and mentions"""
-        string = re.sub(r"@[A-Za-z0-9]+", "", string)
-        url = re.search('https?://[A-Za-z0-9./]+', string)
-        if url:
-            if len(string) < 50:
-                try:
-                    reponse = requests.get(url.group(0), verify=False)
-                    tree = fromstring(reponse.content)
-                    title = tree.findtext('.//title')
-                    string = re.sub('https?://[A-Za-z0-9./]+',
-                                    f' {title} ',
-                                    string)
-                except Exception as error:
-                    print(error)
-            else:
-                string = re.sub('https?://[A-Za-z0-9./]+', '', string)
+        string = re.sub(r"@[A-Za-z0-9]+", "", string)  # Delete tweet mentions
+        # tweets = string.split(" < - > ")
+        # for tweet in tweets:
+        #     if len(tweet) < 50:
+        #         url = re.search('https?://[A-Za-z0-9./]+', tweet)
+        #         if url:
+        #             try:
+        #                 reponse = requests.get(url.group(0), verify=False)
+        #                 tree = fromstring(reponse.content)
+        #                 title = tree.findtext('.//title')
+        #                 print(string)
+        #                 print(title + "\n")
+        #                 string = re.sub('https?://[A-Za-z0-9./]+',
+        #                                 f' {title} ',
+        #                                 string)
+        #             except Exception as error:
+        #                 print(error)
+        #     else:
+        #         string = re.sub('https?://[A-Za-z0-9./]+', '', string)
+        string = re.sub('https?://[A-Za-z0-9./]+', '', string)
         string = string.lower()
         cleaned_string = ''
         for num, char in enumerate(string):
@@ -82,7 +87,7 @@ class PrepareData():
         print("Disagreement examples ", self.dis_lines)
         self.line_number = self.agr_lines + self.dis_lines
 
-    def check_idx_matrix(self):
+    def check_idx_matrix_occurance(self):
         """Checks if any idx matrix exists"""
         self.calculate_lines()
         rnn = RNNModel()
@@ -93,7 +98,7 @@ class PrepareData():
                      f.endswith("idsMatrix.npy")]
         if len(idsMatrix) >= 1:
             ans = input(
-                "Found 'idsMatrix'. Would you like to recreate it? (y/n)")
+                "Found 'idsMatrix'. Would you like to recreate it? (y/n) ")
             if ans in ["y", "", "Yes", "Y"]:
                 self.create_idx()
             else:
@@ -126,6 +131,9 @@ class PrepareData():
                             ids[self.current_state + num][w_num] = \
                                 get_word_index
                         except ValueError:
+                            # repeated_found = re.match(r'(.)\1{2,}', word)
+                            # if repeated_found:
+                            #     print(word)
                             ids[self.current_state + num][w_num] = 000
                         if w_num >= self.maxSeqLength - 1:
                             break
@@ -210,7 +218,10 @@ class RNNModel():
             )
             cells.append(lstm_cell)
         cell = tf.contrib.rnn.MultiRNNCell(cells)
-        value, _ = tf.nn.dynamic_rnn(cell, data, dtype=tf.float32)
+        initial_state = cell.zero_state(self.batchSize, tf.float32)
+        value, final_state = tf.nn.dynamic_rnn(cell, data,
+                                               initial_state=initial_state,
+                                               dtype=tf.float32)
 
         weight = tf.Variable(tf.truncated_normal(
             [self.lstmUnits,
@@ -221,6 +232,9 @@ class RNNModel():
         last = tf.gather(value, int(value.get_shape()[0]) - 1)
 
         prediction = (tf.matmul(last, weight) + bias)
+        # Adding prediction to histogram
+        tf.summary.histogram('predictions', prediction)
+
         # Here we are doing the same
         tf.add_to_collection("prediction", prediction)
 
@@ -246,7 +260,7 @@ class RNNModel():
         saver = tf.train.Saver()
         sess.run(tf.global_variables_initializer())
 
-        for i in range(config.training_steps):
+        for i in range(config.training_steps+1):
             # Next Batch of reviews
             nextBatch, nextBatchLabels = self.get_train_batch()
             sess.run(optimizer, {input_data: nextBatch,
