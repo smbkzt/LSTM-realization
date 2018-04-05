@@ -1,5 +1,5 @@
 numDimensions = 100
-maxSeqLength = 70
+maxSeqLength = 100
 batchSize = 100
 lstmUnits = 128
 numClasses = 2
