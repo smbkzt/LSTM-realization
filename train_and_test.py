@@ -49,21 +49,18 @@ class PrepareData():
         #                 print(error)
         #     else:
         #         string = re.sub('https?://[A-Za-z0-9./]+', '', string)
-        string = re.sub('https?://[A-Za-z0-9./]+', '', string)
-        string = string.lower()
+        string = re.sub('https?://[A-Za-z0-9./]+', '', string.lower())
         cleaned_string = ''
-        for num, char in enumerate(string):
-            if char == "<":
-                if string[num + 2] == "-" and string[num + 4] == ">":
+        string = string.split(" < - > ")
+        for num, part in enumerate(string, 1):
+            for char in part:
+                if char not in punctuation:
                     cleaned_string += char
-            elif char == "-":
-                if string[num - 2] == "<" and string[num + 2] == ">":
-                    cleaned_string += char
-            elif char == ">":
-                if string[num - 4] == "<" and string[num - 2] == "-":
-                    cleaned_string += char
-            elif char not in punctuation:
-                cleaned_string += char
+            if num == 1:
+                cleaned_string += " < - > "
+        repeated_found = re.search(r'\s{2,}', cleaned_string)
+        if repeated_found:
+            cleaned_string = re.sub(r'\s{2,}', " ", cleaned_string)
         return cleaned_string
 
     def load_glove_model(self):
@@ -78,7 +75,7 @@ class PrepareData():
                          f.endswith(endswith)]
         return list_of_files
 
-    def calculate_lines(self) -> str:
+    def calculate_lines(self) -> int:
         # Get the list of all files in folder
         self.filesList = self.get_files_list(self.dataset_path, ".polarity")
 
