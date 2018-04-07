@@ -71,12 +71,17 @@ class PrepareData():
         self.wordsList = np.load('data/wordsList.npy')
         self.wordsList = self.wordsList.tolist()
 
+    def get_files_list(self, path,  endswith):
+        list_of_files = [path + f for f
+                         in listdir(path)
+                         if isfile(join(path, f)) and
+                         f.endswith(endswith)]
+        return list_of_files
+
     def calculate_lines(self) -> str:
         # Get the list of all files in folder
-        self.filesList = [self.dataset_path + f for f
-                          in listdir(self.dataset_path)
-                          if isfile(join(self.dataset_path, f)) and
-                          f.endswith(".polarity")]
+        self.filesList = self.get_files_list(self.dataset_path, ".polarity")
+
         for file in self.filesList:
             with open(file, 'r') as f:
                 lines = f.readlines()
@@ -94,9 +99,7 @@ class PrepareData():
         rnn = RNNModel()
         rnn.agr_lines = self.agr_lines
         rnn.dis_lines = self.dis_lines
-        idsMatrix = [self.dataset_path + f for f in listdir(self.dataset_path)
-                     if isfile(join(self.dataset_path, f)) and
-                     f.endswith("idsMatrix.npy")]
+        idsMatrix = self.get_files_list(self.dataset_path, "idsMatrix.npy")
         if len(idsMatrix) >= 1:
             ans = input(
                 "Found 'idsMatrix'. Would you like to recreate it? (y/n) ")
@@ -135,7 +138,7 @@ class PrepareData():
                             # repeated_found = re.match(r'(.)\1{2,}', word)
                             # if repeated_found:
                             #     print(word)
-                            ids[self.current_state + num][w_num] = 000
+                            ids[self.current_state + num][w_num] = 399999
                         if w_num >= self.maxSeqLength - 1:
                             break
             # To continue from "checkpoint"
