@@ -3,6 +3,9 @@ myenv
 tensorboard
 model
 models
-data
+data/first_data.zip
+data/shuffle_files.py
+data/wordsList.npy
+data/wordVectors.npy
 .DS_Store
 .vscode
