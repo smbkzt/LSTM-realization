@@ -224,15 +224,17 @@ class RNNModel():
                                                initial_state=initial_state,
                                                dtype=tf.float32)
 
-        weight = tf.Variable(tf.truncated_normal(
-            [self.lstmUnits,
-             self.numClasses])
-        )
-        bias = tf.Variable(tf.constant(0.1, shape=[self.numClasses]))
-        value = tf.transpose(value, [1, 0, 2])
-        last = tf.gather(value, int(value.get_shape()[0]) - 1)
+        # weight = tf.Variable(tf.truncated_normal(
+        #     [self.lstmUnits,
+        #      self.numClasses])
+        # )
+        # bias = tf.Variable(tf.constant(0.1, shape=[self.numClasses]))
+        # value = tf.transpose(value, [1, 0, 2])
+        # last = tf.gather(value, int(value.get_shape()[0]) - 1)
+        # prediction = (tf.matmul(last, weight) + bias)
 
-        prediction = (tf.matmul(last, weight) + bias)
+        prediction = tf.contrib.layers.fully_connected(
+            value[:, -1], 2, activation_fn=tf.tanh)
         # Adding prediction to histogram
         tf.summary.histogram('predictions', prediction)
 
@@ -248,7 +250,7 @@ class RNNModel():
             logits=prediction, labels=labels)
         )
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
-
+        tf.add_to_collection("optimizer", optimizer)
         tf.summary.scalar('Loss', loss)
         tf.summary.scalar('Accuracy', accuracy)
         merged = tf.summary.merge_all()
