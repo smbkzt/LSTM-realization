@@ -224,17 +224,15 @@ class RNNModel():
                                                initial_state=initial_state,
                                                dtype=tf.float32)
 
-        # weight = tf.Variable(tf.truncated_normal(
-        #     [self.lstmUnits,
-        #      self.numClasses])
-        # )
-        # bias = tf.Variable(tf.constant(0.1, shape=[self.numClasses]))
-        # value = tf.transpose(value, [1, 0, 2])
-        # last = tf.gather(value, int(value.get_shape()[0]) - 1)
-        # prediction = (tf.matmul(last, weight) + bias)
+        weight = tf.Variable(tf.truncated_normal(
+            [self.lstmUnits,
+             self.numClasses])
+        )
+        bias = tf.Variable(tf.constant(0.1, shape=[self.numClasses]))
+        value = tf.transpose(value, [1, 0, 2])
+        last = tf.gather(value, int(value.get_shape()[0]) - 1)
+        prediction = (tf.matmul(last, weight) + bias)
 
-        prediction = tf.contrib.layers.fully_connected(
-            value[:, -1], 2, activation_fn=tf.tanh)
         # Adding prediction to histogram
         tf.summary.histogram('predictions', prediction)
 
@@ -253,6 +251,7 @@ class RNNModel():
         tf.add_to_collection("optimizer", optimizer)
         tf.summary.scalar('Loss', loss)
         tf.summary.scalar('Accuracy', accuracy)
+        tf.summary.histogram("Out", value[:, -1])
         merged = tf.summary.merge_all()
 
         # ------ Below is training process ---------
@@ -271,12 +270,24 @@ class RNNModel():
                      )
             # Write summary to Tensorboard
             if i % 100 == 0:
-                print("Iterations: ", i)
+                print(f"Iterations: {i}/{config.training_steps}")
                 summary = sess.run(merged,
                                    {input_data: nextBatch,
                                     labels: nextBatchLabels}
                                    )
                 writer.add_summary(summary, i)
+            if i % 200 == 0 and i != 0:
+                val_acc = []
+                val_state = sess.run(cell.zero_state(
+                    self.batchSize, tf.float32))
+                nextBatch, nextBatchLabels = self.get_test_batch()
+                feed = {input_data: nextBatch,
+                        labels: nextBatchLabels,
+                        initial_state: val_state}
+                summary, batch_acc, val_state = sess.run(
+                    [merged, accuracy, final_state], feed_dict=feed)
+                val_acc.append(batch_acc)
+                print("\nVal acc: {:.3f}\n".format(np.mean(val_acc)))
             # Save the network every 10,000 training iterations
             # if (i % 1000 == 0 and i != 0):
             #     save_path = saver.save(sess,
@@ -284,8 +295,9 @@ class RNNModel():
             #                            global_step=i)
             #     print(f"Saved to {save_path}")
 
-        saver.save(sess, "models/pretrained_lstm.ckpt",
-                   global_step=config.training_steps)
+        path = saver.save(sess, "models/pretrained_lstm.ckpt",
+                          global_step=config.training_steps)
+        print(f"Model saved to: {path}")
         writer.close()
         sess.close()
 
@@ -303,12 +315,12 @@ class RNNModel():
             saver.restore(sess, tf.train.latest_checkpoint(dir_))
             print("Testing pre-trained model....")
             test_acc = []
-            for i in range(120):
+            for i in range(20):
                 nextBatch, nextBatchLabels = self.get_test_batch()
                 cur_acc = sess.run(accuracy,
                                    {input_data: nextBatch,
                                     labels: nextBatchLabels}
-                                   ) * 100
+                                   )
                 test_acc.append(cur_acc)
             print("Test accuracy: {:.3f}".format(np.mean(test_acc)))
 
