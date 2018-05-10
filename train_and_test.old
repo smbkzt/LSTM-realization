@@ -1,6 +1,10 @@
 import os
+import re
 import datetime
 import argparse
+import requests
+# from lxml.html import fromstring
+
 from os import listdir
 from random import randint
 from string import punctuation
@@ -11,46 +15,70 @@ import tensorflow as tf
 
 import config
 
+requests.packages.urllib3.disable_warnings()
+
 
 class PrepareData():
     """Preparing dataset to be inputed in TF"""
 
-    def __init__(self, path):
+    def __init__(self, path: str):
         self.dataset_path = path
         self.maxSeqLength = config.maxSeqLength
         self.current_state = 0
-        self.load_glove_model()
-        self.calculate_lines()
-        self.check_idx_matrix()
+        self.check_idx_matrix_occurance()
 
-    def clean_string(self, string) -> str:
-        """Cleans messages from punctuation"""
+    @staticmethod
+    def clean_string(string: str) -> str:
+        """Cleans messages from punctuation and mentions"""
+        string = re.sub(r"@[A-Za-z0-9]+", "", string)  # Delete tweet mentions
+        # tweets = string.split(" < - > ")
+        # for tweet in tweets:
+        #     if len(tweet) < 50:
+        #         url = re.search('https?://[A-Za-z0-9./]+', tweet)
+        #         if url:
+        #             try:
+        #                 reponse = requests.get(url.group(0), verify=False)
+        #                 tree = fromstring(reponse.content)
+        #                 title = tree.findtext('.//title')
+        #                 print(string)
+        #                 print(title + "\n")
+        #                 string = re.sub('https?://[A-Za-z0-9./]+',
+        #                                 f' {title} ',
+        #                                 string)
+        #             except Exception as error:
+        #                 print(error)
+        #     else:
+        #         string = re.sub('https?://[A-Za-z0-9./]+', '', string)
+        string = re.sub('https?://[A-Za-z0-9./]+', '', string.lower())
         cleaned_string = ''
-        for num, char in enumerate(string):
-            if char == "<":
-                if string[num + 2] == "-" and string[num + 4] == ">":
+        string = string.split(" < - > ")
+        for num, part in enumerate(string, 1):
+            for char in part:
+                if char not in punctuation:
                     cleaned_string += char
-            elif char == "-":
-                if string[num - 2] == "<" and string[num + 2] == ">":
-                    cleaned_string += char
-            elif char == ">":
-                if string[num - 4] == "<" and string[num - 2] == "-":
-                    cleaned_string += char
-            elif char not in punctuation:
-                cleaned_string += char
+            if num == 1:
+                cleaned_string += " < - > "
+        repeated_found = re.search(r'\s{2,}', cleaned_string)
+        if repeated_found:
+            cleaned_string = re.sub(r'\s{2,}', " ", cleaned_string)
         return cleaned_string
 
     def load_glove_model(self):
         """Loads the glove model"""
         self.wordsList = np.load('data/wordsList.npy')
         self.wordsList = self.wordsList.tolist()
-        self.wordVectors = np.load('data/wordVectors.npy')
 
-    def calculate_lines(self) -> str:
+    def get_files_list(self, path,  endswith):
+        list_of_files = [path + f for f
+                         in listdir(path)
+                         if isfile(join(path, f)) and
+                         f.endswith(endswith)]
+        return list_of_files
+
+    def calculate_lines(self) -> int:
         # Get the list of all files in folder
-        self.filesList = [self.dataset_path + f for f in listdir(self.dataset_path)
-                          if isfile(join(self.dataset_path, f)) and
-                          f.endswith(".polarity")]
+        self.filesList = self.get_files_list(self.dataset_path, ".polarity")
+
         for file in self.filesList:
             with open(file, 'r') as f:
                 lines = f.readlines()
@@ -62,13 +90,16 @@ class PrepareData():
         print("Disagreement examples ", self.dis_lines)
         self.line_number = self.agr_lines + self.dis_lines
 
-    def check_idx_matrix(self):
+    def check_idx_matrix_occurance(self):
         """Checks if any idx matrix exists"""
-        idsMatrix = [self.dataset_path + f for f in listdir(self.dataset_path)
-                     if isfile(join(self.dataset_path, f)) and
-                     f.endswith("idsMatrix.npy")]
+        self.calculate_lines()
+        rnn = RNNModel()
+        rnn.agr_lines = self.agr_lines
+        rnn.dis_lines = self.dis_lines
+        idsMatrix = self.get_files_list(self.dataset_path, "idsMatrix.npy")
         if len(idsMatrix) >= 1:
-            ans = input("Found 'idsMatrix'. Would you like to recreate it?y/n ")
+            ans = input(
+                "Found 'idsMatrix'. Would you like to recreate it? (y/n) ")
             if ans in ["y", "", "Yes", "Y"]:
                 self.create_idx()
             else:
@@ -76,9 +107,11 @@ class PrepareData():
         else:
             print("Haven't found the idx matrix models.")
             self.create_idx()
+        rnn.create_and_train_model()
 
     def create_idx(self):
         """Function of idx creation"""
+        self.load_glove_model()
         ids = np.zeros((self.line_number, self.maxSeqLength),
                        dtype='int32')
         for file in sorted(self.filesList):
@@ -88,15 +121,21 @@ class PrepareData():
                 for num, line in enumerate(lines):
                     if num % 100 == 0:
                         current_line = num + self.current_state
-                        print(f"Reading line number: {current_line}/{self.line_number}")
+                        print(
+                            f"Reading line number: \
+                            {current_line}/{self.line_number}")
                     cleaned_line = self.clean_string(line)
                     split = cleaned_line.split()
                     for w_num, word in enumerate(split):
                         try:
                             get_word_index = self.wordsList.index(word)
-                            ids[self.current_state + num][w_num] = get_word_index
+                            ids[self.current_state + num][w_num] = \
+                                get_word_index
                         except ValueError:
-                            ids[self.current_state + num][w_num] = 000
+                            # repeated_found = re.match(r'(.)\1{2,}', word)
+                            # if repeated_found:
+                            #     print(word)
+                            ids[self.current_state + num][w_num] = 399999
                         if w_num >= self.maxSeqLength - 1:
                             break
             # To continue from "checkpoint"
@@ -105,22 +144,17 @@ class PrepareData():
         print("Saved ids matrix to the 'model/idsMatrix';")
 
 
-class RNNModel(PrepareData):
+class RNNModel():
     """Class of TF models creation"""
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
 
-    def __init__(self, path="uknown"):
-        dir_path = path
-        if not dir_path == "uknown":
-            super(RNNModel, self).__init__(dir_path)
-
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
-
-        self.ids = np.load('data/idsMatrix.npy')
+    def __init__(self):
         self.batchSize = config.batchSize
         self.lstmUnits = config.lstmUnits
         self.numClasses = config.numClasses
         self.numDimensions = config.numDimensions
         self.maxSeqLength = config.maxSeqLength
+        self.wordVectors = np.load('data/wordVectors.npy')
 
     def get_train_batch(self):
         """Returning training batch function"""
@@ -139,7 +173,6 @@ class RNNModel(PrepareData):
 
     def get_test_batch(self):
         """Returning training batch function"""
-        self.ids = np.load('data/idsMatrix.npy')
         with open("data/agreed.polarity") as f:
             agr_lines = len(f.readlines())
         with open("data/disagreed.polarity") as f:
@@ -159,6 +192,7 @@ class RNNModel(PrepareData):
 
     def create_and_train_model(self):
         """Creates the TF model"""
+        self.ids = np.load('data/idsMatrix.npy')
         print("Creating training model...")
         tf.reset_default_graph()
         sess = tf.InteractiveSession()
@@ -185,7 +219,10 @@ class RNNModel(PrepareData):
             )
             cells.append(lstm_cell)
         cell = tf.contrib.rnn.MultiRNNCell(cells)
-        value, _ = tf.nn.dynamic_rnn(cell, data, dtype=tf.float32)
+        initial_state = cell.zero_state(self.batchSize, tf.float32)
+        value, final_state = tf.nn.dynamic_rnn(cell, data,
+                                               initial_state=initial_state,
+                                               dtype=tf.float32)
 
         weight = tf.Variable(tf.truncated_normal(
             [self.lstmUnits,
@@ -194,8 +231,11 @@ class RNNModel(PrepareData):
         bias = tf.Variable(tf.constant(0.1, shape=[self.numClasses]))
         value = tf.transpose(value, [1, 0, 2])
         last = tf.gather(value, int(value.get_shape()[0]) - 1)
-
         prediction = (tf.matmul(last, weight) + bias)
+
+        # Adding prediction to histogram
+        tf.summary.histogram('predictions', prediction)
+
         # Here we are doing the same
         tf.add_to_collection("prediction", prediction)
 
@@ -208,9 +248,10 @@ class RNNModel(PrepareData):
             logits=prediction, labels=labels)
         )
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
-
+        tf.add_to_collection("optimizer", optimizer)
         tf.summary.scalar('Loss', loss)
         tf.summary.scalar('Accuracy', accuracy)
+        tf.summary.histogram("Out", value[:, -1])
         merged = tf.summary.merge_all()
 
         # ------ Below is training process ---------
@@ -221,7 +262,7 @@ class RNNModel(PrepareData):
         saver = tf.train.Saver()
         sess.run(tf.global_variables_initializer())
 
-        for i in range(config.training_steps):
+        for i in range(config.training_steps+1):
             # Next Batch of reviews
             nextBatch, nextBatchLabels = self.get_train_batch()
             sess.run(optimizer, {input_data: nextBatch,
@@ -229,12 +270,24 @@ class RNNModel(PrepareData):
                      )
             # Write summary to Tensorboard
             if i % 100 == 0:
-                print("Iterations: ", i)
+                print(f"Iterations: {i}/{config.training_steps}")
                 summary = sess.run(merged,
                                    {input_data: nextBatch,
                                     labels: nextBatchLabels}
                                    )
                 writer.add_summary(summary, i)
+            if i % 200 == 0 and i != 0:
+                val_acc = []
+                val_state = sess.run(cell.zero_state(
+                    self.batchSize, tf.float32))
+                nextBatch, nextBatchLabels = self.get_test_batch()
+                feed = {input_data: nextBatch,
+                        labels: nextBatchLabels,
+                        initial_state: val_state}
+                summary, batch_acc, val_state = sess.run(
+                    [merged, accuracy, final_state], feed_dict=feed)
+                val_acc.append(batch_acc)
+                print("\nVal acc: {:.3f}\n".format(np.mean(val_acc)))
             # Save the network every 10,000 training iterations
             # if (i % 1000 == 0 and i != 0):
             #     save_path = saver.save(sess,
@@ -242,13 +295,15 @@ class RNNModel(PrepareData):
             #                            global_step=i)
             #     print(f"Saved to {save_path}")
 
-        saver.save(sess, "models/pretrained_lstm.ckpt",
-                   global_step=config.training_steps)
+        path = saver.save(sess, "models/pretrained_lstm.ckpt",
+                          global_step=config.training_steps)
+        print(f"Model saved to: {path}")
         writer.close()
         sess.close()
 
     def test_model(self, dir_):
         # Starting the session
+        self.ids = np.load('data/idsMatrix.npy')
         with tf.Session() as sess:
             path = ".".join([tf.train.latest_checkpoint(dir_), "meta"])
             # Get collections
@@ -259,20 +314,15 @@ class RNNModel(PrepareData):
 
             saver.restore(sess, tf.train.latest_checkpoint(dir_))
             print("Testing pre-trained model....")
-
-            iterations = 100
-            accuracy_int = 0
-            for i in range(iterations):
+            test_acc = []
+            for i in range(20):
                 nextBatch, nextBatchLabels = self.get_test_batch()
                 cur_acc = sess.run(accuracy,
                                    {input_data: nextBatch,
                                     labels: nextBatchLabels}
-                                   ) * 100
-                if i > 0:
-                    accuracy_int += cur_acc
-                    av_acc = accuracy_int / i
-                    print("Test batch #", i,
-                          f"Curr/Avg accuracy:{int(cur_acc)}/{int(av_acc)}")
+                                   )
+                test_acc.append(cur_acc)
+            print("Test accuracy: {:.3f}".format(np.mean(test_acc)))
 
 
 if __name__ == '__main__':
@@ -281,8 +331,7 @@ if __name__ == '__main__':
     parser.add_argument("--test", help="Test trained model")
     args = parser.parse_args()
     if args.train:
-        train = RNNModel(args.train)
-        train.create_and_train_model()
+        train = PrepareData(args.train)
     elif args.test:
         test = RNNModel()
         test.test_model(args.test)

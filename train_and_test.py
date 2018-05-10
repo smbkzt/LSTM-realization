@@ -22,15 +22,23 @@ class PrepareData():
     """Preparing dataset to be inputed in TF"""
 
     def __init__(self, path: str):
-        self.dataset_path = path
-        self.maxSeqLength = config.maxSeqLength
-        self.current_state = 0
-        self.check_idx_matrix_occurance()
+        self.__dataset_path = path
+        self.__maxSeqLength = config.maxSeqLength
+        self.__current_state = 0
+        self.__overall_line_number = 0
+        self.__check_idx_matrix_occurance()
 
     @staticmethod
     def clean_string(string: str) -> str:
         """Cleans messages from punctuation and mentions"""
-        string = re.sub(r"@[A-Za-z0-9]+", "", string)  # Delete tweet mentions
+        seperator = " < - > "
+        cleaned_string = ''
+        cut_sentence_until = int(config.maxSeqLength/2) - int(len(seperator)/2)
+
+        #  Delete tweet mentions
+        string = re.sub(r"@[A-Za-z0-9]+", "", string)
+
+        # Replace urls with website titles
         # tweets = string.split(" < - > ")
         # for tweet in tweets:
         #     if len(tweet) < 50:
@@ -49,97 +57,118 @@ class PrepareData():
         #                 print(error)
         #     else:
         #         string = re.sub('https?://[A-Za-z0-9./]+', '', string)
+
+        # Delete the urls
         string = re.sub('https?://[A-Za-z0-9./]+', '', string.lower())
-        cleaned_string = ''
-        string = string.split(" < - > ")
+
+        # Delete all punctuation marks
+        string = string.split(seperator)
         for num, part in enumerate(string, 1):
             for char in part:
                 if char not in punctuation:
                     cleaned_string += char
             if num == 1:
-                cleaned_string += " < - > "
-        repeated_found = re.search(r'\s{2,}', cleaned_string)
-        if repeated_found:
+                cleaned_string += seperator
+
+        # delete repeated whitespaces (more than 2)
+        if re.search(r'\s{2,}', cleaned_string):
             cleaned_string = re.sub(r'\s{2,}', " ", cleaned_string)
+
+        # Check whether the length of the sentences are more than max+50
+        # If it is max, cut 2 sentences from the center (seperator)
+        if len(cleaned_string.split()) > config.maxSeqLength + 50:
+            new_line = " "
+            cleaned_string = cleaned_string.split(seperator)
+            for number, line in enumerate(cleaned_string):
+                line_ = line.split(" ")[:cut_sentence_until]
+                for word in line_:
+                    new_line += word
+                    new_line += " "
+                if number == 0:
+                    new_line += seperator
+            cleaned_string = new_line
         return cleaned_string
 
-    def load_glove_model(self):
+    def __get_words_list(self) -> list:
         """Loads the glove model"""
-        self.wordsList = np.load('data/wordsList.npy')
-        self.wordsList = self.wordsList.tolist()
 
-    def get_files_list(self, path,  endswith):
+        wordsList = np.load('data/wordsList.npy')
+        wordsList = wordsList.tolist()
+        return wordsList
+
+    def __get_files_list(self, path: str,  endswith: str) -> list:
+        """Finds files with .polarity extension in the desired path"""
+
         list_of_files = [path + f for f
                          in listdir(path)
                          if isfile(join(path, f)) and
                          f.endswith(endswith)]
         return list_of_files
 
-    def calculate_lines(self) -> int:
+    def __calculate_lines(self) -> int:
         # Get the list of all files in folder
-        self.filesList = self.get_files_list(self.dataset_path, ".polarity")
+        self.filesList = self.__get_files_list(
+            self.__dataset_path, ".polarity")
 
         for file in self.filesList:
             with open(file, 'r') as f:
                 lines = f.readlines()
             if "data/agreed.polarity" == file:
-                self.agr_lines = len(lines)
+                agr_lines = len(lines)
             else:
-                self.dis_lines = len(lines)
-        print("Agreement examples ", self.agr_lines)
-        print("Disagreement examples ", self.dis_lines)
-        self.line_number = self.agr_lines + self.dis_lines
+                dis_lines = len(lines)
+        self.__overall_line_number = agr_lines + dis_lines
+        return agr_lines, dis_lines
 
-    def check_idx_matrix_occurance(self):
+    def __check_idx_matrix_occurance(self):
         """Checks if any idx matrix exists"""
-        self.calculate_lines()
         rnn = RNNModel()
-        rnn.agr_lines = self.agr_lines
-        rnn.dis_lines = self.dis_lines
-        idsMatrix = self.get_files_list(self.dataset_path, "idsMatrix.npy")
+        rnn.set_agr_lines, rnn.set_dis_lines = self.__calculate_lines()
+        idsMatrix = self.__get_files_list(self.__dataset_path, "idsMatrix.npy")
         if len(idsMatrix) >= 1:
             ans = input(
                 "Found 'idsMatrix'. Would you like to recreate it? (y/n) ")
             if ans in ["y", "", "Yes", "Y"]:
-                self.create_idx()
+                self.__create_idx()
             else:
                 print("Continue...")
         else:
             print("Haven't found the idx matrix models.")
-            self.create_idx()
+            self.__create_idx()
         rnn.create_and_train_model()
 
-    def create_idx(self):
+    def __create_idx(self):
         """Function of idx creation"""
-        self.load_glove_model()
-        ids = np.zeros((self.line_number, self.maxSeqLength),
+        wordsList = self.__get_words_list()
+        ids = np.zeros((self.__overall_line_number + 1, self.__maxSeqLength),
                        dtype='int32')
         for file in sorted(self.filesList):
-            with open(f"{file}", "r", errors='ignore') as f:
-                print(f"\nStarted reading file - {file}....")
-                lines = f.readlines()
-                for num, line in enumerate(lines):
-                    if num % 100 == 0:
-                        current_line = num + self.current_state
-                        print(
-                            f"Reading line number: \
-                            {current_line}/{self.line_number}")
-                    cleaned_line = self.clean_string(line)
-                    split = cleaned_line.split()
-                    for w_num, word in enumerate(split):
-                        try:
-                            get_word_index = self.wordsList.index(word)
-                            ids[self.current_state + num][w_num] = \
-                                get_word_index
-                        except ValueError:
-                            # repeated_found = re.match(r'(.)\1{2,}', word)
-                            # if repeated_found:
-                            #     print(word)
-                            ids[self.current_state + num][w_num] = 399999
-                        if w_num >= self.maxSeqLength - 1:
-                            break
+            f = open(f"{file}", "r")
+            print(f"\nStarted reading file - {file}....")
+            lines = f.readlines()
+            for num, line in enumerate(lines, 1):
+                if num % 100 == 0:
+                    current_line = num + self.__current_state
+                    print(
+                        f"Reading line number: \
+                        {current_line}/{self.__overall_line_number}")
+                cleaned_line = self.clean_string(line)
+                splitted_line = cleaned_line.split()
+                for w_num, word in enumerate(splitted_line):
+                    try:
+                        get_word_index = wordsList.index(word)
+                        ids[self.__current_state + num][w_num] = \
+                            get_word_index
+                    except ValueError:
+                        # repeated_found = re.match(r'(.)\1{2,}', word)
+                        # if repeated_found:
+                        #     print(word)
+                        ids[self.__current_state + num][w_num] = 399999
+                    if w_num >= self.__maxSeqLength - 1:
+                        break
+                f.close()
             # To continue from "checkpoint"
-            self.current_state += len(lines)
+            self.__current_state += len(lines)
         np.save('data/idsMatrix', ids)
         print("Saved ids matrix to the 'model/idsMatrix';")
 
@@ -149,45 +178,71 @@ class RNNModel():
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Avoid the tf warnings
 
     def __init__(self):
-        self.batchSize = config.batchSize
-        self.lstmUnits = config.lstmUnits
-        self.numClasses = config.numClasses
-        self.numDimensions = config.numDimensions
-        self.maxSeqLength = config.maxSeqLength
-        self.wordVectors = np.load('data/wordVectors.npy')
+        self.__batchSize = config.batchSize
+        self.__lstmUnits = config.lstmUnits
+        self.__numClasses = config.numClasses
+        self.__numDimensions = config.numDimensions
+        self.__maxSeqLength = config.maxSeqLength
+        self.__wordVectors = np.load('data/wordVectors.npy')
+        self.__agr_lines = int
+        self.__dis_lines = int
 
-    def get_train_batch(self):
+    @property
+    def get_agr_lines(self):
+        return self.__agr_lines
+
+    @property
+    def get_dis_lines(self):
+        return self.__dis_lines
+
+    @get_agr_lines.setter
+    def set_agr_lines(self, value):
+        self.__agr_lines = value
+
+    @get_dis_lines.setter
+    def set_dis_lines(self, value):
+        self.__dis_lines = value
+
+    def __get_train_batch(self):
         """Returning training batch function"""
         labels = []
-        arr = np.zeros([self.batchSize, self.maxSeqLength])
-        for i in range(self.batchSize):
+        arr = np.zeros([self.__batchSize, self.__maxSeqLength])
+        for i in range(self.__batchSize):
             if i % 2 == 0:
-                num = randint(1, int(self.agr_lines - (self.agr_lines * 0.1)))
+                num = randint(
+                    1, int(self.__agr_lines - (self.__agr_lines * 0.1)))
                 labels.append([1, 0])  # Agreed
             else:
-                num = randint(int(self.agr_lines + (self.dis_lines * 0.1)),
-                              int(self.agr_lines + self.dis_lines))
+                from_line = int(self.__agr_lines +
+                                (self.__dis_lines * 0.1)) + 1
+                to_line = int(self.__agr_lines + self.__dis_lines)
+                num = randint(from_line, to_line)
                 labels.append([0, 1])  # Disagreed
-            arr[i] = self.ids[num - 1:num]
+            arr[i] = self.ids[num]
         return arr, labels
 
-    def get_test_batch(self):
+    def __get_test_batch(self):
         """Returning training batch function"""
+        labels = []
         with open("data/agreed.polarity") as f:
             agr_lines = len(f.readlines())
         with open("data/disagreed.polarity") as f:
             dis_lines = len(f.readlines())
-        labels = []
-        arr = np.zeros([self.batchSize, self.maxSeqLength])
-        from_line = int(agr_lines - (agr_lines * 0.1))
-        to_line = int(agr_lines + (dis_lines * 0.1))
-        for i in range(self.batchSize):
-            num = randint(from_line, to_line)
-            if num <= agr_lines:
+
+        arr = np.zeros([self.__batchSize, self.__maxSeqLength])
+        agr_from_line = int(agr_lines - (agr_lines * 0.1)) + 1
+        agr_to_line = agr_lines
+        dis_from_line = agr_lines + 1
+        dis_to_line = int(agr_lines + (dis_lines * 0.1)) + 1
+
+        for i in range(self.__batchSize):
+            if i % 2 == 0:
+                num = randint(agr_from_line, agr_to_line)
                 labels.append([1, 0])  # Agreed
             else:
+                num = randint(dis_from_line, dis_to_line)
                 labels.append([0, 1])  # Disagreed
-            arr[i] = self.ids[num - 1:num]
+            arr[i] = self.ids[num]
         return arr, labels
 
     def create_and_train_model(self):
@@ -197,38 +252,38 @@ class RNNModel():
         tf.reset_default_graph()
         sess = tf.InteractiveSession()
         labels = tf.placeholder(tf.float32,
-                                [self.batchSize, self.numClasses])
+                                [self.__batchSize, self.__numClasses])
         tf.add_to_collection("labels", labels)
 
         input_data = tf.placeholder(tf.int32,
-                                    [self.batchSize, self.maxSeqLength])
+                                    [self.__batchSize, self.__maxSeqLength])
         # We are saving to the collections, in order to resore it later
         tf.add_to_collection("input_data", input_data)
 
-        data = tf.Variable(tf.zeros([self.batchSize,
-                                     self.maxSeqLength,
-                                     self.numDimensions]), dtype=tf.float32)
+        data = tf.Variable(tf.zeros([self.__batchSize,
+                                     self.__maxSeqLength,
+                                     self.__numDimensions]), dtype=tf.float32)
 
-        data = tf.nn.embedding_lookup(self.wordVectors, input_data)
+        data = tf.nn.embedding_lookup(self.__wordVectors, input_data)
         cells = []
         for _ in range(config.cells):
-            lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.lstmUnits)
+            lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.__lstmUnits)
             lstm_cell = tf.contrib.rnn.DropoutWrapper(
                 cell=lstm_cell,
                 output_keep_prob=0.75
             )
             cells.append(lstm_cell)
         cell = tf.contrib.rnn.MultiRNNCell(cells)
-        initial_state = cell.zero_state(self.batchSize, tf.float32)
+        initial_state = cell.zero_state(self.__batchSize, tf.float32)
         value, final_state = tf.nn.dynamic_rnn(cell, data,
                                                initial_state=initial_state,
                                                dtype=tf.float32)
 
         weight = tf.Variable(tf.truncated_normal(
-            [self.lstmUnits,
-             self.numClasses])
+            [self.__lstmUnits,
+             self.__numClasses])
         )
-        bias = tf.Variable(tf.constant(0.1, shape=[self.numClasses]))
+        bias = tf.Variable(tf.constant(0.1, shape=[self.__numClasses]))
         value = tf.transpose(value, [1, 0, 2])
         last = tf.gather(value, int(value.get_shape()[0]) - 1)
         prediction = (tf.matmul(last, weight) + bias)
@@ -264,7 +319,7 @@ class RNNModel():
 
         for i in range(config.training_steps+1):
             # Next Batch of reviews
-            nextBatch, nextBatchLabels = self.get_train_batch()
+            nextBatch, nextBatchLabels = self.__get_train_batch()
             sess.run(optimizer, {input_data: nextBatch,
                                  labels: nextBatchLabels}
                      )
@@ -279,8 +334,8 @@ class RNNModel():
             if i % 200 == 0 and i != 0:
                 val_acc = []
                 val_state = sess.run(cell.zero_state(
-                    self.batchSize, tf.float32))
-                nextBatch, nextBatchLabels = self.get_test_batch()
+                    self.__batchSize, tf.float32))
+                nextBatch, nextBatchLabels = self.__get_test_batch()
                 feed = {input_data: nextBatch,
                         labels: nextBatchLabels,
                         initial_state: val_state}
@@ -316,7 +371,7 @@ class RNNModel():
             print("Testing pre-trained model....")
             test_acc = []
             for i in range(20):
-                nextBatch, nextBatchLabels = self.get_test_batch()
+                nextBatch, nextBatchLabels = self.__get_test_batch()
                 cur_acc = sess.run(accuracy,
                                    {input_data: nextBatch,
                                     labels: nextBatchLabels}

@@ -10,17 +10,17 @@ from train_and_test import PrepareData
 class TryLstm():
     def __init__(self):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-        self.maxSeqLength = config.maxSeqLength
-        self.batchSize = config.batchSize
-        self.load_gloves()
-        self.restore_models()
+        self.__maxSeqLength = config.maxSeqLength
+        self.__batchSize = config.batchSize
+        self.__load_gloves()
+        self.__restore_models()
 
-    def load_gloves(self):
+    def __load_gloves(self):
         print("Loading gloves model...")
         self.wordsList = np.load('data/wordsList.npy').tolist()
         self.wordsList = [word for word in self.wordsList]
 
-    def restore_models(self):
+    def __restore_models(self):
         tf.reset_default_graph()
         self.sess = tf.Session()
 
@@ -34,11 +34,11 @@ class TryLstm():
         self.prediction = tf.get_collection("prediction")[0]
 
     def predict(self, inputText):
-        inputMatrix = self.getSentenceMatrix(inputText)
+        inputMatrix = self.__getSentenceMatrix(inputText)
         predictedSentiment = self.sess.run(self.prediction,
                                            {self.input_data: inputMatrix}
                                            )[0]
-        if (predictedSentiment[0] > predictedSentiment[1]):
+        if predictedSentiment[0] > predictedSentiment[1]:
             print("|----------------------------------------------------|")
             print("|---The comment message has agreement sentiment------|")
             print("|----------------------------------------------------|")
@@ -51,12 +51,14 @@ class TryLstm():
         print(f"Disagreement coefficient:",
               "{0:.2f}".format(predictedSentiment[1]))
 
-    def getSentenceMatrix(self, sentence):
-        sentenceMatrix = np.zeros([self.batchSize, self.maxSeqLength],
+    def __getSentenceMatrix(self, sentence):
+        sentenceMatrix = np.zeros([self.__batchSize, self.__maxSeqLength],
                                   dtype='int32')
         cleanedSentence = PrepareData.clean_string(sentence)
         split = cleanedSentence.split()
         for indexCounter, word in enumerate(split):
+            if indexCounter >= self.__maxSeqLength:
+                break
             try:
                 sentenceMatrix[0, indexCounter] = self.wordsList.index(word)
             except ValueError:
