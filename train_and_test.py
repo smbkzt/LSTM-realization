@@ -310,9 +310,17 @@ class RNNModel():
         merged = tf.summary.merge_all()
 
         # ------ Below is training process ---------
-        log_dir = "tensorboard/" + \
-                  datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+        folder_name = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_dir = "tensorboard/" + str(folder_name) + "/"
         writer = tf.summary.FileWriter(log_dir, sess.graph)
+        with open(f"{log_dir}configs.txt", 'w') as f:
+            f.write("Number of dimensions: {}\n".format(config.numDimensions))
+            f.write("Sequence length: {}\n".format(config.maxSeqLength))
+            f.write("Batch sizes: {}\n".format(config.batchSize))
+            f.write("LSTM units: {}\n".format(config.lstmUnits))
+            f.write("Number of classes: {}\n".format(config.numClasses))
+            f.write("Cells: {}\n".format(config.cells))
+            f.write("Training steps: {}\n".format(config.training_steps))
 
         saver = tf.train.Saver()
         sess.run(tf.global_variables_initializer())
@@ -342,17 +350,17 @@ class RNNModel():
                 summary, batch_acc, val_state = sess.run(
                     [merged, accuracy, final_state], feed_dict=feed)
                 val_acc.append(batch_acc)
-                print("\nVal acc: {:.3f}\n".format(np.mean(val_acc)))
+                avg_acc = np.mean(val_acc)
+                print("\nVal acc: {:.3f}\n".format(avg_acc))
             # Save the network every 10,000 training iterations
             # if (i % 1000 == 0 and i != 0):
             #     save_path = saver.save(sess,
             #                            "models/pretrained_lstm.ckpt",
             #                            global_step=i)
             #     print(f"Saved to {save_path}")
-
-        path = saver.save(sess, "models/pretrained_lstm.ckpt",
-                          global_step=config.training_steps)
-        print(f"Model saved to: {path}")
+        save_path = f"models/{folder_name}/pretrained_lstm.ckpt"
+        saver.save(sess, save_path, global_step=config.training_steps)
+        print(f"Model saved to: {save_path}")
         writer.close()
         sess.close()
 

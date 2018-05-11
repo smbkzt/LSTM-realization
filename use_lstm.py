@@ -1,4 +1,5 @@
 import os
+import argparse
 
 import numpy as np
 import tensorflow as tf
@@ -8,8 +9,9 @@ from train_and_test import PrepareData
 
 
 class TryLstm():
-    def __init__(self):
+    def __init__(self, path):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+        self.__path = path
         self.__maxSeqLength = config.maxSeqLength
         self.__batchSize = config.batchSize
         self.__load_gloves()
@@ -25,9 +27,9 @@ class TryLstm():
         self.sess = tf.Session()
 
         # Restoring the meta and latest model
-        path = ".".join([tf.train.latest_checkpoint("models/"), "meta"])
+        path = ".".join([tf.train.latest_checkpoint(self.__path), "meta"])
         saver = tf.train.import_meta_graph(path)
-        saver.restore(self.sess, tf.train.latest_checkpoint('models/'))
+        saver.restore(self.sess, tf.train.latest_checkpoint(self.__path))
 
         # Restoring the tf variables
         self.input_data = tf.get_collection("input_data")[0]
@@ -68,19 +70,25 @@ class TryLstm():
 
 
 if __name__ == '__main__':
-    var = TryLstm()
-    try:
-        while True:
-            original_tweet = input("\n---Enter origin message: ")
-            if original_tweet == "exit":
-                var.sess.close()
-                exit(1)
-            comment = input("---Enter comment message: ")
-            inputText = original_tweet + " < - > " + comment
-            var.predict(inputText)
-    except Exception as e:
-        print("Exception occurred: ", e)
-    finally:
-        # Close the session and exit the code in the end
-        var.sess.close()
-        exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", help="Use the model")
+    args = parser.parse_args()
+    var = TryLstm(args.model) if args.model else None
+    if var is not None:
+        try:
+            while True:
+                original_tweet = input("\n---Enter origin message: ")
+                if original_tweet == "exit":
+                    var.sess.close()
+                    exit(1)
+                comment = input("---Enter comment message: ")
+                inputText = original_tweet + " < - > " + comment
+                var.predict(inputText)
+        except Exception as e:
+            print("Exception occurred: ", e)
+        finally:
+            # Close the session and exit the code in the end
+            var.sess.close()
+            exit(1)
+    else:
+        raise FileNotFoundError("The model path hasn't been provided")
