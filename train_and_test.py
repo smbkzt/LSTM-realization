@@ -312,7 +312,7 @@ class RNNModel():
         merged = tf.summary.merge_all()
 
         # ------ Below is training process ---------
-        folder_name = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        folder_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         log_dir = "tensorboard/" + str(folder_name) + "/"
         writer = tf.summary.FileWriter(log_dir, sess.graph)
         with open(f"{log_dir}configs.txt", 'w') as f:
@@ -360,7 +360,7 @@ class RNNModel():
             #                            "models/pretrained_lstm.ckpt",
             #                            global_step=i)
             #     print(f"Saved to {save_path}")
-        save_path = f"models/{folder_name}/pretrained_lstm.ckpt"
+        save_path = f"{log_dir}pretrained_lstm.ckpt"
         saver.save(sess, save_path, global_step=config.training_steps)
         print(f"Model saved to: {save_path}")
         writer.close()

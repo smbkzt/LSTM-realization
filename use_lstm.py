@@ -4,7 +4,6 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-import config
 from train_and_test import PrepareData
 
 
