@@ -12,8 +12,6 @@ class TryLstm():
     def __init__(self, path):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
         self.__path = path
-        self.__maxSeqLength = config.maxSeqLength
-        self.__batchSize = config.batchSize
         self.__load_gloves()
         self.__restore_models()
 
@@ -34,6 +32,8 @@ class TryLstm():
         # Restoring the tf variables
         self.input_data = tf.get_collection("input_data")[0]
         self.prediction = tf.get_collection("prediction")[0]
+        self.__maxSeqLength = tf.get_collection("max_seq_length")[0]
+        self.__batchSize = tf.get_collection("batch_size")[0]
 
     def predict(self, inputText):
         inputMatrix = self.__getSentenceMatrix(inputText)

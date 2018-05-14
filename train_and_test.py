@@ -293,6 +293,8 @@ class RNNModel():
 
         # Here we are doing the same
         tf.add_to_collection("prediction", prediction)
+        tf.add_to_collection("max_seq_length", self.__maxSeqLength)
+        tf.add_to_collection("batch_size", self.__batchSize)
 
         correct_pred = tf.equal(tf.argmax(prediction, 1),
                                 tf.argmax(labels, 1))
