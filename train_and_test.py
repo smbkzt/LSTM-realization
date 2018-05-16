@@ -111,7 +111,7 @@ class PrepareData():
             self.__dataset_path, ".polarity")
 
         for file in self.filesList:
-            with open(file, 'r') as f:
+            with open(file, 'r', encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
             if "data/agreed.polarity" == file:
                 agr_lines = len(lines)
@@ -143,7 +143,7 @@ class PrepareData():
         ids = np.zeros((self.__overall_line_number + 1, self.__maxSeqLength),
                        dtype='int32')
         for file in sorted(self.filesList):
-            f = open(f"{file}", "r")
+            f = open(f"{file}", "r", encoding="utf-8", errors="ignore")
             print(f"\nStarted reading file - {file}....")
             lines = f.readlines()
             for num, line in enumerate(lines, 1):
@@ -224,9 +224,9 @@ class RNNModel():
     def __get_test_batch(self):
         """Returning training batch function"""
         labels = []
-        with open("data/agreed.polarity") as f:
+        with open("data/agreed.polarity", errors="ignore", encoding="utf-8") as f:
             agr_lines = len(f.readlines())
-        with open("data/disagreed.polarity") as f:
+        with open("data/disagreed.polarity", errors="ignore", encoding="utf-8") as f:
             dis_lines = len(f.readlines())
 
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
