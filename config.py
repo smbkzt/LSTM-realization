@@ -5,3 +5,4 @@ lstmUnits = 64
 numClasses = 2
 training_steps = 2000
 cells = 1
+learning_rate = 0.001

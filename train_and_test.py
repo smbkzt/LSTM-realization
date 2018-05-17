@@ -2,7 +2,7 @@ import os
 import re
 import datetime
 import argparse
-import requests
+# import requests
 # from lxml.html import fromstring
 
 from os import listdir
@@ -15,14 +15,14 @@ import tensorflow as tf
 
 import config
 
-requests.packages.urllib3.disable_warnings()
+# requests.packages.urllib3.disable_warnings()
 
 
 class PrepareData():
     """Preparing dataset to be inputed in TF"""
 
     def __init__(self, path: str):
-        self.__dataset_path = path
+        self.__dataset_path = path if path.endswith("/") else path + "/"
         self.__maxSeqLength = config.maxSeqLength
         self.__current_state = 0
         self.__overall_line_number = 0
@@ -186,6 +186,7 @@ class RNNModel():
         self.__wordVectors = np.load('data/wordVectors.npy')
         self.__agr_lines = int
         self.__dis_lines = int
+        self.learning_rate = config.learning_rate
 
     @property
     def get_agr_lines(self):
@@ -224,10 +225,11 @@ class RNNModel():
     def __get_test_batch(self):
         """Returning training batch function"""
         labels = []
-        with open("data/agreed.polarity", errors="ignore", encoding="utf-8") as f:
-            agr_lines = len(f.readlines())
-        with open("data/disagreed.polarity", errors="ignore", encoding="utf-8") as f:
-            dis_lines = len(f.readlines())
+        f = open("data/agreed.polarity", errors="ignore", encoding="utf-8")
+        agr_lines = len(f.readlines())
+        f = open("data/disagreed.polarity", errors="ignore", encoding="utf-8")
+        dis_lines = len(f.readlines())
+        f.close()
 
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
         agr_from_line = int(agr_lines - (agr_lines * 0.1)) + 1
@@ -304,7 +306,8 @@ class RNNModel():
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             logits=prediction, labels=labels)
         )
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
+        optimizer = tf.train.AdamOptimizer(
+            learning_rate=self.learning_rate).minimize(loss)
         tf.add_to_collection("optimizer", optimizer)
         tf.summary.scalar('Loss', loss)
         tf.summary.scalar('Accuracy', accuracy)
@@ -313,7 +316,7 @@ class RNNModel():
 
         # ------ Below is training process ---------
         folder_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log_dir = "tensorboard/" + str(folder_name) + "/"
+        log_dir = "models/" + str(folder_name) + "/"
         writer = tf.summary.FileWriter(log_dir, sess.graph)
         with open(f"{log_dir}configs.txt", 'w') as f:
             f.write("Number of dimensions: {}\n".format(config.numDimensions))

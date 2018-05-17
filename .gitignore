@@ -7,6 +7,5 @@ data/first_data.zip
 data/shuffle_files.py
 data/wordsList.npy
 data/wordVectors.npy
-data/idsMatrix.npy
 .DS_Store
 .vscode
