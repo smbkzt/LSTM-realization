@@ -24,7 +24,6 @@ class PrepareData():
     def __init__(self, path: str):
         self.__dataset_path = path if path.endswith("/") else path + "/"
         self.__maxSeqLength = config.maxSeqLength
-        self.__current_state = 0
         self.__overall_line_number = 0
         self.__check_idx_matrix_occurance()
 
@@ -107,23 +106,42 @@ class PrepareData():
 
     def __calculate_lines(self) -> int:
         # Get the list of all files in folder
+        f = open("data/all_tweets.txt", "w")
         self.filesList = self.__get_files_list(
             self.__dataset_path, ".polarity")
-
         for file in self.filesList:
-            with open(file, 'r', encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
+            count = 0
+            with open(file, 'r') as file_read:
+                lines = file_read.readlines()
+            for line in lines:
+                if self.isEnglish(line):
+                    count += 1
+                    f.writelines(line)
             if "data/agreed.polarity" == file:
-                agr_lines = len(lines)
+                agr_lines = count
+            if "data/none.polarity" == file:
+                none_lines = count
             else:
-                dis_lines = len(lines)
-        self.__overall_line_number = agr_lines + dis_lines
-        return agr_lines, dis_lines
+                dis_lines = count
+        f.close()
+        self.__overall_line_number = int(
+            agr_lines) + int(dis_lines) + int(none_lines)
+        return int(agr_lines), int(dis_lines), int(none_lines)
+
+    def isEnglish(self, s):
+        try:
+            s.encode(encoding='utf-8').decode('ascii')
+        except UnicodeDecodeError:
+            return False
+        else:
+            return True
 
     def __check_idx_matrix_occurance(self):
         """Checks if any idx matrix exists"""
         rnn = RNNModel()
-        rnn.set_agr_lines, rnn.set_dis_lines = self.__calculate_lines()
+        rnn.set_agr_lines, rnn.set_dis_lines, rnn.set_none_lines = \
+            self.__calculate_lines()
+        rnn.set_overall_lines = self.__overall_line_number
         idsMatrix = self.__get_files_list(self.__dataset_path, "idsMatrix.npy")
         if len(idsMatrix) >= 1:
             ans = input(
@@ -142,33 +160,31 @@ class PrepareData():
         wordsList = self.__get_words_list()
         ids = np.zeros((self.__overall_line_number + 1, self.__maxSeqLength),
                        dtype='int32')
-        for file in sorted(self.filesList):
-            f = open(f"{file}", "r", encoding="utf-8", errors="ignore")
-            print(f"\nStarted reading file - {file}....")
-            lines = f.readlines()
-            for num, line in enumerate(lines, 1):
-                if num % 100 == 0:
-                    current_line = num + self.__current_state
-                    print(
-                        f"Reading line number: \
-                        {current_line}/{self.__overall_line_number}")
-                cleaned_line = self.clean_string(line)
-                splitted_line = cleaned_line.split()
-                for w_num, word in enumerate(splitted_line):
-                    try:
-                        get_word_index = wordsList.index(word)
-                        ids[self.__current_state + num][w_num] = \
-                            get_word_index
-                    except ValueError:
-                        # repeated_found = re.match(r'(.)\1{2,}', word)
-                        # if repeated_found:
-                        #     print(word)
-                        ids[self.__current_state + num][w_num] = 399999
-                    if w_num >= self.__maxSeqLength - 1:
-                        break
-                f.close()
-            # To continue from "checkpoint"
-            self.__current_state += len(lines)
+        f = open("data/all_tweets.txt", "r")
+        lines = f.readlines()
+        for line_mumber, line in enumerate(lines, 1):
+            if line_mumber % 1000 == 0:
+                current_line = line_mumber
+                print(
+                    f"Reading line number: \
+                    {current_line}/{self.__overall_line_number}")
+
+            cleaned_line = self.clean_string(line)
+            splitted_line = cleaned_line.split()
+            for w_num, word in enumerate(splitted_line):
+                try:
+                    get_word_index = wordsList.index(word)
+                    ids[line_mumber][w_num] = \
+                        get_word_index
+                except ValueError:
+                    # repeated_found = re.match(r'(.)\1{2,}', word)
+                    # if repeated_found:
+                    #     print(word)
+                    ids[line_mumber][w_num] = 399999
+                if w_num >= self.__maxSeqLength - 1:
+                    break
+            f.close()
+        # To continue from "checkpoint"
         np.save('data/idsMatrix', ids)
         print("Saved ids matrix to the 'model/idsMatrix';")
 
@@ -186,6 +202,8 @@ class RNNModel():
         self.__wordVectors = np.load('data/wordVectors.npy')
         self.__agr_lines = int
         self.__dis_lines = int
+        self.__none_lines = int
+        self.__overall_lines = int
         self.learning_rate = config.learning_rate
 
     @property
@@ -204,6 +222,22 @@ class RNNModel():
     def set_dis_lines(self, value):
         self.__dis_lines = value
 
+    @property
+    def get_none_lines(self):
+        return self.__none_lines
+
+    @get_none_lines.setter
+    def set_none_lines(self, value):
+        self.__none_lines = value
+
+    @property
+    def get_overall_lines(self):
+        return self.__overall_lines
+
+    @get_overall_lines.setter
+    def set_overall_lines(self, value):
+        self.__overall_lines = value
+
     def __get_train_batch(self):
         """Returning training batch function"""
         labels = []
@@ -211,8 +245,13 @@ class RNNModel():
         for i in range(self.__batchSize):
             if i % 2 == 0:
                 num = randint(
-                    1, int(self.__agr_lines - (self.__agr_lines * 0.1)))
+                    1, int(self.__agr_lines * 0.9))
                 labels.append([1, 0])  # Agreed
+            elif i % 3 == 0:
+                num = randint(
+                    self.__dis_lines, self.__agr_lines + self.__dis_lines +
+                    int(self.__none_lines*0.9))
+                labels.append([0, 0])  # None
             else:
                 from_line = int(self.__agr_lines +
                                 (self.__dis_lines * 0.1)) + 1
@@ -225,22 +264,20 @@ class RNNModel():
     def __get_test_batch(self):
         """Returning training batch function"""
         labels = []
-        f = open("data/agreed.polarity", errors="ignore", encoding="utf-8")
-        agr_lines = len(f.readlines())
-        f = open("data/disagreed.polarity", errors="ignore", encoding="utf-8")
-        dis_lines = len(f.readlines())
-        f.close()
-
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
-        agr_from_line = int(agr_lines - (agr_lines * 0.1)) + 1
-        agr_to_line = agr_lines
-        dis_from_line = agr_lines + 1
-        dis_to_line = int(agr_lines + (dis_lines * 0.1)) + 1
+        agr_from_line = int(self.__agr_lines * 0.9) + 1
+        agr_to_line = self.__agr_lines
+        dis_from_line = self.__agr_lines + 1
+        dis_to_line = int(self.__agr_lines + int(self.__dis_lines * 0.1)) + 1
 
         for i in range(self.__batchSize):
             if i % 2 == 0:
                 num = randint(agr_from_line, agr_to_line)
                 labels.append([1, 0])  # Agreed
+            elif i % 3 == 0:
+                num = randint(int(self.__agr_lines + self.__dis_lines +
+                                  self.__none_lines * 0.9), self.__overall_lines)
+                labels.append([0, 0])  # Agreed
             else:
                 num = randint(dis_from_line, dis_to_line)
                 labels.append([0, 1])  # Disagreed

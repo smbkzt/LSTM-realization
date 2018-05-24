@@ -39,13 +39,17 @@ class TryLstm():
         predictedSentiment = self.sess.run(self.prediction,
                                            {self.input_data: inputMatrix}
                                            )[0]
-        if predictedSentiment[0] > predictedSentiment[1]:
+        if max(predictedSentiment) == predictedSentiment[0]:
             print("|----------------------------------------------------|")
             print("|---The comment message has agreement sentiment------|")
             print("|----------------------------------------------------|")
-        else:
+        elif max(predictedSentiment) == predictedSentiment[1]:
             print("|----------------------------------------------------|")
-            print("|---The comment message has disagreement sentiment---|")
+            print("|---The comment message has neutral sentiment---|")
+            print("|----------------------------------------------------|")
+        elif max(predictedSentiment) == predictedSentiment[2]:
+            print("|----------------------------------------------------|")
+            print("|---The comment message has dis sentiment---|")
             print("|----------------------------------------------------|")
         print(f"Agreement coefficient:",
               "{0:.2f}".format(predictedSentiment[0]))
