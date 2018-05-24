@@ -72,7 +72,7 @@ class TryLstm():
         return sentenceMatrix
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="Use the model")
     args = parser.parse_args()
@@ -95,3 +95,7 @@ if __name__ == '__main__':
             exit(1)
     else:
         raise FileNotFoundError("The model path hasn't been provided")
+
+
+if __name__ == '__main__':
+    main()

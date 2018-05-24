@@ -111,15 +111,15 @@ class PrepareData():
             self.__dataset_path, ".polarity")
         for file in self.filesList:
             count = 0
-            with open(file, 'r') as file_read:
-                try:
-                    lines = file_read.readlines()
-                    for line in lines:
-                        if self.isEnglish(line):
-                            count += 1
-                            f.writelines(line)
-                except UnicodeDecodeError as e:
-                    print(e)
+            file_read = open(file, 'r')
+            try:
+                lines = file_read.readlines()
+                for line in lines:
+                    if self.isEnglish(line):
+                        count += 1
+                        f.writelines(line)
+            except UnicodeDecodeError as e:
+                print(e)
 
             if "data/agreed.polarity" == file:
                 agr_lines = count
@@ -127,11 +127,12 @@ class PrepareData():
                 none_lines = count
             else:
                 dis_lines = count
+            file_read.close()
         f.close()
         self.__overall_line_number = agr_lines + dis_lines + none_lines
         return agr_lines, dis_lines, none_lines
 
-    def isEnglish(self, s):
+    def isEnglish(self, s) -> bool:
         try:
             s.encode(encoding='utf-8').decode('ascii')
         except UnicodeDecodeError:
@@ -139,8 +140,9 @@ class PrepareData():
         else:
             return True
 
-    def __check_idx_matrix_occurance(self):
+    def __check_idx_matrix_occurance(self) -> None:
         """Checks if any idx matrix exists"""
+
         rnn = RNNModel()
         rnn.set_agr_lines, rnn.set_dis_lines, rnn.set_none_lines = \
             self.__calculate_lines()
@@ -158,14 +160,14 @@ class PrepareData():
             self.__create_idx()
         rnn.create_and_train_model()
 
-    def __create_idx(self):
+    def __create_idx(self) -> None:
         """Function of idx creation"""
         wordsList = self.__get_words_list()
         ids = np.zeros((self.__overall_line_number + 1, self.__maxSeqLength),
                        dtype='int32')
-        f = open("data/all_tweets.txt", "r")
-        lines = f.readlines()
-        for line_mumber, line in enumerate(lines, 1):
+        with open("data/all_tweets.txt", "r") as f:
+            lines = f.readlines()
+        for line_mumber, line in enumerate(lines):
             if line_mumber % 1000 == 0:
                 print(
                     f"Reading line number: \
@@ -178,14 +180,9 @@ class PrepareData():
                     get_word_index = wordsList.index(word)
                     ids[line_mumber][w_num] = get_word_index
                 except ValueError:
-                    # repeated_found = re.match(r'(.)\1{2,}', word)
-                    # if repeated_found:
-                    #     print(word)
                     ids[line_mumber][w_num] = 399999
                 if w_num >= self.__maxSeqLength - 1:
                     break
-            f.close()
-        # To continue from "checkpoint"
         np.save('data/idsMatrix', ids)
         print("Saved ids matrix to the 'model/idsMatrix';")
 
@@ -211,13 +208,13 @@ class RNNModel():
     def get_agr_lines(self):
         return self.__agr_lines
 
-    @property
-    def get_dis_lines(self):
-        return self.__dis_lines
-
     @get_agr_lines.setter
     def set_agr_lines(self, value):
         self.__agr_lines = value
+
+    @property
+    def get_dis_lines(self):
+        return self.__dis_lines
 
     @get_dis_lines.setter
     def set_dis_lines(self, value):
@@ -239,7 +236,7 @@ class RNNModel():
     def set_overall_lines(self, value):
         self.__overall_lines = value
 
-    def __get_train_batch(self):
+    def __get_train_batch(self) -> list:
         """Returning training batch function"""
         labels = []
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
@@ -265,7 +262,7 @@ class RNNModel():
 
         return arr, labels
 
-    def __get_test_batch(self):
+    def __get_test_batch(self) -> list:
         """Returning training batch function"""
         labels = []
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
@@ -290,7 +287,7 @@ class RNNModel():
             arr[i] = self.ids[num]
         return arr, labels
 
-    def create_and_train_model(self):
+    def create_and_train_model(self) -> None:
         """Creates the TF model"""
         self.ids = np.load('data/idsMatrix.npy')
         print("Creating training model...")
@@ -412,7 +409,7 @@ class RNNModel():
         writer.close()
         sess.close()
 
-    def test_model(self, dir_):
+    def test_model(self, dir_) -> None:
         # Starting the session
         self.ids = np.load('data/idsMatrix.npy')
         with tf.Session() as sess:
