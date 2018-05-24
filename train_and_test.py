@@ -111,22 +111,24 @@ class PrepareData():
             self.__dataset_path, ".polarity")
         for file in self.filesList:
             count = 0
-            with open(file, 'r', errors="ignore") as file_read:
-                lines = file_read.readlines()
-            for line in lines:
-                if self.isEnglish(line):
-                    count += 1
-                    f.writelines(line)
+            with open(file, 'r') as file_read:
+                try:
+                    lines = file_read.readlines()
+                    for line in lines:
+                        count += 1
+                        f.writelines(line)
+                except UnicodeDecodeError as e:
+                    print(e)
+
             if "data/agreed.polarity" == file:
                 agr_lines = count
-            if "data/none.polarity" == file:
+            elif "data/none.polarity" == file:
                 none_lines = count
             else:
                 dis_lines = count
         f.close()
-        self.__overall_line_number = int(
-            agr_lines) + int(dis_lines) + int(none_lines)
-        return int(agr_lines), int(dis_lines), int(none_lines)
+        self.__overall_line_number = agr_lines + dis_lines + none_lines
+        return agr_lines, dis_lines, none_lines
 
     def isEnglish(self, s):
         try:
@@ -164,18 +166,16 @@ class PrepareData():
         lines = f.readlines()
         for line_mumber, line in enumerate(lines, 1):
             if line_mumber % 1000 == 0:
-                current_line = line_mumber
                 print(
                     f"Reading line number: \
-                    {current_line}/{self.__overall_line_number}")
+                    {line_mumber}/{self.__overall_line_number}")
 
             cleaned_line = self.clean_string(line)
             splitted_line = cleaned_line.split()
             for w_num, word in enumerate(splitted_line):
                 try:
                     get_word_index = wordsList.index(word)
-                    ids[line_mumber][w_num] = \
-                        get_word_index
+                    ids[line_mumber][w_num] = get_word_index
                 except ValueError:
                     # repeated_found = re.match(r'(.)\1{2,}', word)
                     # if repeated_found:
