@@ -115,8 +115,9 @@ class PrepareData():
                 try:
                     lines = file_read.readlines()
                     for line in lines:
-                        count += 1
-                        f.writelines(line)
+                        if self.isEnglish(line):
+                            count += 1
+                            f.writelines(line)
                 except UnicodeDecodeError as e:
                     print(e)
 
