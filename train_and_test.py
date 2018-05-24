@@ -111,7 +111,7 @@ class PrepareData():
             self.__dataset_path, ".polarity")
         for file in self.filesList:
             count = 0
-            with open(file, 'r') as file_read:
+            with open(file, 'r', errors="ignore") as file_read:
                 lines = file_read.readlines()
             for line in lines:
                 if self.isEnglish(line):
@@ -276,7 +276,8 @@ class RNNModel():
                 labels.append([1, 0])  # Agreed
             elif i % 3 == 0:
                 num = randint(int(self.__agr_lines + self.__dis_lines +
-                                  self.__none_lines * 0.9), self.__overall_lines)
+                                  self.__none_lines * 0.9),
+                              self.__overall_lines)
                 labels.append([0, 0])  # Agreed
             else:
                 num = randint(dis_from_line, dis_to_line)
