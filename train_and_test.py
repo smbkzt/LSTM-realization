@@ -243,23 +243,26 @@ class RNNModel():
         """Returning training batch function"""
         labels = []
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
-        for i in range(self.__batchSize):
-            if i % 2 == 0:
-                num = randint(
-                    1, int(self.__agr_lines * 0.9))
-                labels.append([1, 0, 0])  # Agreed
-            elif i % 3 == 0:
-                num = randint(
-                    self.__dis_lines, self.__agr_lines + self.__dis_lines +
-                    int(self.__none_lines*0.9))
-                labels.append([0, 1, 0])  # None
-            else:
-                from_line = int(self.__agr_lines +
-                                (self.__dis_lines * 0.1)) + 1
-                to_line = int(self.__agr_lines + self.__dis_lines)
-                num = randint(from_line, to_line)
-                labels.append([0, 0, 1])  # Disagreed
+        one_third = int(self.__batchSize / 3)
+        for i in range(one_third):
+            num = randint(
+                1, int(self.__agr_lines * 0.9))
+            labels.append([1, 0, 0])  # Agreed
             arr[i] = self.ids[num]
+        for i in range(one_third, one_third * 2):
+            num = randint(
+                self.__dis_lines, self.__agr_lines + self.__dis_lines +
+                int(self.__none_lines*0.9))
+            labels.append([0, 1, 0])  # None
+            arr[i] = self.ids[num]
+        for i in range(one_third*2, self.__batchSize):
+            from_line = int(self.__agr_lines +
+                            (self.__dis_lines * 0.1)) + 1
+            to_line = int(self.__agr_lines + self.__dis_lines)
+            num = randint(from_line, to_line)
+            labels.append([0, 0, 1])  # Disagreed
+            arr[i] = self.ids[num]
+
         return arr, labels
 
     def __get_test_batch(self):
@@ -270,19 +273,20 @@ class RNNModel():
         agr_to_line = self.__agr_lines
         dis_from_line = self.__agr_lines + 1
         dis_to_line = int(self.__agr_lines + int(self.__dis_lines * 0.1)) + 1
-
-        for i in range(self.__batchSize):
-            if i % 2 == 0:
-                num = randint(agr_from_line, agr_to_line)
-                labels.append([1, 0, 0])  # Agreed
-            elif i % 3 == 0:
-                num = randint(int(self.__agr_lines + self.__dis_lines +
-                                  self.__none_lines * 0.9),
-                              self.__overall_lines)
-                labels.append([0, 1, 0])  # Agreed
-            else:
-                num = randint(dis_from_line, dis_to_line)
-                labels.append([0, 0, 1])  # Disagreed
+        one_third = int(self.__batchSize / 3)
+        for i in range(one_third):
+            num = randint(agr_from_line, agr_to_line)
+            labels.append([1, 0, 0])  # Agreed
+            arr[i] = self.ids[num]
+        for i in range(one_third, one_third * 2):
+            num = randint(int(self.__agr_lines + self.__dis_lines +
+                              self.__none_lines * 0.9),
+                          self.__overall_lines)
+            labels.append([0, 1, 0])  # Agreed
+            arr[i] = self.ids[num]
+        for i in range(one_third*2, self.__batchSize):
+            num = randint(dis_from_line, dis_to_line)
+            labels.append([0, 0, 1])  # Disagreed
             arr[i] = self.ids[num]
         return arr, labels
 
@@ -383,7 +387,7 @@ class RNNModel():
                                     labels: nextBatchLabels}
                                    )
                 writer.add_summary(summary, i)
-            if i % 200 == 0 and i != 0:
+            if i % 1000 == 0 and i != 0:
                 val_acc = []
                 val_state = sess.run(cell.zero_state(
                     self.__batchSize, tf.float32))
