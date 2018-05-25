@@ -2,12 +2,13 @@ import os
 import re
 import datetime
 import argparse
+import pickle
 # import requests
 # from lxml.html import fromstring
 
 from os import listdir
 from random import randint
-from string import punctuation
+# from string import punctuation
 from os.path import isfile, join
 
 import numpy as np
@@ -131,6 +132,11 @@ class PrepareData():
             file_read.close()
         f.close()
         self.__overall_line_number = agr_lines + dis_lines + none_lines
+
+        agr_and_disagree = [agr_lines, dis_lines, none_lines]
+        with open("data/length.pckl", 'wb') as f:
+            pickle.dump(agr_and_disagree, f)
+
         return agr_lines, dis_lines, none_lines
 
     def __check_idx_matrix_occurance(self) -> None:
@@ -258,6 +264,12 @@ class RNNModel():
     def __get_test_batch(self) -> list:
         """Returning training batch function"""
         labels = []
+        with open('data/length.pckl', 'rb') as f:
+            self.__agr_lines, self.__dis_lines, self.__none_lines = \
+                pickle.load(f)
+            self.__overall_lines = self.__agr_lines + self.__dis_lines + \
+                self.__none_lines
+
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
         agr_from_line = int(self.__agr_lines * 0.9) + 1
         agr_to_line = self.__agr_lines
