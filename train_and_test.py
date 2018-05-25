@@ -2,6 +2,7 @@ import os
 import re
 import datetime
 import argparse
+import pickle
 # import requests
 # from lxml.html import fromstring
 
@@ -24,7 +25,6 @@ class PrepareData():
     def __init__(self, path: str):
         self.__dataset_path = path if path.endswith("/") else path + "/"
         self.__maxSeqLength = config.maxSeqLength
-        self.__current_state = 0
         self.__overall_line_number = 0
         self.__check_idx_matrix_occurance()
 
@@ -107,23 +107,50 @@ class PrepareData():
 
     def __calculate_lines(self) -> int:
         # Get the list of all files in folder
+        f = open("data/all_tweets.txt", "w")
         self.filesList = self.__get_files_list(
             self.__dataset_path, ".polarity")
-
         for file in self.filesList:
-            with open(file, 'r', encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
+            count = 0
+            file_read = open(file, 'r')
+            try:
+                lines = file_read.readlines()
+                for line in lines:
+                    if self.isEnglish(line):
+                        count += 1
+                        f.writelines(line)
+            except Exception as e:
+                print(e)
+
             if "data/agreed.polarity" == file:
-                agr_lines = len(lines)
+                agr_lines = count
             else:
-                dis_lines = len(lines)
+                dis_lines = count
+            file_read.close()
+        f.close()
+
+        agr_and_disagree = [agr_lines, dis_lines]
+        with open("data/length.pckl", 'wb') as f:
+            pickle.dump(agr_and_disagree, f)
+
         self.__overall_line_number = agr_lines + dis_lines
         return agr_lines, dis_lines
 
-    def __check_idx_matrix_occurance(self):
+    def isEnglish(self, s) -> bool:
+        try:
+            s.encode(encoding='utf-8').decode('ascii')
+        except UnicodeDecodeError:
+            return False
+        else:
+            return True
+
+    def __check_idx_matrix_occurance(self) -> None:
         """Checks if any idx matrix exists"""
+
         rnn = RNNModel()
         rnn.set_agr_lines, rnn.set_dis_lines = self.__calculate_lines()
+        rnn.set_overall_lines = self.__overall_line_number
+
         idsMatrix = self.__get_files_list(self.__dataset_path, "idsMatrix.npy")
         if len(idsMatrix) >= 1:
             ans = input(
@@ -137,38 +164,29 @@ class PrepareData():
             self.__create_idx()
         rnn.create_and_train_model()
 
-    def __create_idx(self):
+    def __create_idx(self) -> None:
         """Function of idx creation"""
         wordsList = self.__get_words_list()
         ids = np.zeros((self.__overall_line_number + 1, self.__maxSeqLength),
                        dtype='int32')
-        for file in sorted(self.filesList):
-            f = open(f"{file}", "r", encoding="utf-8", errors="ignore")
-            print(f"\nStarted reading file - {file}....")
+        with open("data/all_tweets.txt", "r") as f:
             lines = f.readlines()
-            for num, line in enumerate(lines, 1):
-                if num % 100 == 0:
-                    current_line = num + self.__current_state
-                    print(
-                        f"Reading line number: \
-                        {current_line}/{self.__overall_line_number}")
-                cleaned_line = self.clean_string(line)
-                splitted_line = cleaned_line.split()
-                for w_num, word in enumerate(splitted_line):
-                    try:
-                        get_word_index = wordsList.index(word)
-                        ids[self.__current_state + num][w_num] = \
-                            get_word_index
-                    except ValueError:
-                        # repeated_found = re.match(r'(.)\1{2,}', word)
-                        # if repeated_found:
-                        #     print(word)
-                        ids[self.__current_state + num][w_num] = 399999
-                    if w_num >= self.__maxSeqLength - 1:
-                        break
-                f.close()
-            # To continue from "checkpoint"
-            self.__current_state += len(lines)
+        for line_mumber, line in enumerate(lines):
+            if line_mumber % 1000 == 0:
+                print(
+                    f"Reading line number: \
+                    {line_mumber}/{self.__overall_line_number}")
+
+            cleaned_line = self.clean_string(line)
+            splitted_line = cleaned_line.split()
+            for w_num, word in enumerate(splitted_line):
+                try:
+                    get_word_index = wordsList.index(word)
+                    ids[line_mumber][w_num] = get_word_index
+                except ValueError:
+                    ids[line_mumber][w_num] = 399999
+                if w_num >= self.__maxSeqLength - 1:
+                    break
         np.save('data/idsMatrix', ids)
         print("Saved ids matrix to the 'model/idsMatrix';")
 
@@ -186,53 +204,59 @@ class RNNModel():
         self.__wordVectors = np.load('data/wordVectors.npy')
         self.__agr_lines = int
         self.__dis_lines = int
+        self.__overall_lines = int
         self.learning_rate = config.learning_rate
 
     @property
     def get_agr_lines(self):
         return self.__agr_lines
 
-    @property
-    def get_dis_lines(self):
-        return self.__dis_lines
-
     @get_agr_lines.setter
     def set_agr_lines(self, value):
         self.__agr_lines = value
+
+    @property
+    def get_dis_lines(self):
+        return self.__dis_lines
 
     @get_dis_lines.setter
     def set_dis_lines(self, value):
         self.__dis_lines = value
 
-    def __get_train_batch(self):
+    @property
+    def get_overall_lines(self):
+        return self.__overall_lines
+
+    @get_overall_lines.setter
+    def set_overall_lines(self, value):
+        self.__overall_lines = value
+
+    def __get_train_batch(self) -> list:
         """Returning training batch function"""
         labels = []
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
         for i in range(self.__batchSize):
             if i % 2 == 0:
-                num = randint(
-                    1, int(self.__agr_lines - (self.__agr_lines * 0.1)))
+                num = randint(1, int(self.__agr_lines * 0.9))
                 labels.append([1, 0])  # Agreed
             else:
                 from_line = int(self.__agr_lines +
                                 (self.__dis_lines * 0.1)) + 1
-                to_line = int(self.__agr_lines + self.__dis_lines)
+                to_line = int(self.__overall_lines)
                 num = randint(from_line, to_line)
                 labels.append([0, 1])  # Disagreed
             arr[i] = self.ids[num]
         return arr, labels
 
-    def __get_test_batch(self):
+    def __get_test_batch(self) -> list:
         """Returning training batch function"""
         labels = []
-        f = open("data/agreed.polarity", errors="ignore", encoding="utf-8")
-        agr_lines = len(f.readlines())
-        f = open("data/disagreed.polarity", errors="ignore", encoding="utf-8")
-        dis_lines = len(f.readlines())
-        f.close()
+        with open('data/length.pckl', 'rb') as f:
+            agr_lines, dis_lines = pickle.load(f)
 
         arr = np.zeros([self.__batchSize, self.__maxSeqLength])
-        agr_from_line = int(agr_lines - (agr_lines * 0.1)) + 1
+
+        agr_from_line = int(agr_lines * 0.9) + 1
         agr_to_line = agr_lines
         dis_from_line = agr_lines + 1
         dis_to_line = int(agr_lines + (dis_lines * 0.1)) + 1
@@ -247,7 +271,7 @@ class RNNModel():
             arr[i] = self.ids[num]
         return arr, labels
 
-    def create_and_train_model(self):
+    def create_and_train_model(self) -> None:
         """Creates the TF model"""
         self.ids = np.load('data/idsMatrix.npy')
         print("Creating training model...")
@@ -369,7 +393,7 @@ class RNNModel():
         writer.close()
         sess.close()
 
-    def test_model(self, dir_):
+    def test_model(self, dir_) -> None:
         # Starting the session
         self.ids = np.load('data/idsMatrix.npy')
         with tf.Session() as sess:
