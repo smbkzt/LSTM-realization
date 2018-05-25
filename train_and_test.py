@@ -8,7 +8,7 @@ import pickle
 
 from os import listdir
 from random import randint
-from string import punctuation
+# from string import punctuation
 from os.path import isfile, join
 
 import numpy as np
@@ -31,6 +31,8 @@ class PrepareData():
     @staticmethod
     def clean_string(string: str) -> str:
         """Cleans messages from punctuation and mentions"""
+
+        ascii_letters = 'abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         seperator = " < - > "
         cleaned_string = ''
         cut_sentence_until = int(config.maxSeqLength/2) - int(len(seperator)/2)
@@ -65,7 +67,7 @@ class PrepareData():
         string = string.split(seperator)
         for num, part in enumerate(string, 1):
             for char in part:
-                if char not in punctuation:
+                if char in ascii_letters:
                     cleaned_string += char
             if num == 1:
                 cleaned_string += seperator
@@ -116,9 +118,9 @@ class PrepareData():
             try:
                 lines = file_read.readlines()
                 for line in lines:
-                    if self.isEnglish(line):
-                        count += 1
-                        f.writelines(line)
+                    count += 1
+                    f.writelines(PrepareData.clean_string(line))
+                    f.writelines("\n")
             except Exception as e:
                 print(e)
 
@@ -135,14 +137,6 @@ class PrepareData():
 
         self.__overall_line_number = agr_lines + dis_lines
         return agr_lines, dis_lines
-
-    def isEnglish(self, s) -> bool:
-        try:
-            s.encode(encoding='utf-8').decode('ascii')
-        except UnicodeDecodeError:
-            return False
-        else:
-            return True
 
     def __check_idx_matrix_occurance(self) -> None:
         """Checks if any idx matrix exists"""
