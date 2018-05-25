@@ -118,6 +118,7 @@ class PrepareData():
                 for line in lines:
                     count += 1
                     f.writelines(PrepareData.clean_string(line))
+                    f.writelines("\n")
             except UnicodeDecodeError as e:
                 print(e)
 
