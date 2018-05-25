@@ -31,6 +31,7 @@ class PrepareData():
     def clean_string(string: str) -> str:
         """Cleans messages from punctuation and mentions"""
         seperator = " < - > "
+        ascii_letters = 'abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         cleaned_string = ''
         cut_sentence_until = int(config.maxSeqLength/2) - int(len(seperator)/2)
 
@@ -64,7 +65,7 @@ class PrepareData():
         string = string.split(seperator)
         for num, part in enumerate(string, 1):
             for char in part:
-                if char not in punctuation:
+                if char in ascii_letters:
                     cleaned_string += char
             if num == 1:
                 cleaned_string += seperator
@@ -115,9 +116,8 @@ class PrepareData():
             try:
                 lines = file_read.readlines()
                 for line in lines:
-                    if self.isEnglish(line):
-                        count += 1
-                        f.writelines(line)
+                    count += 1
+                    f.writelines(PrepareData.clean_string(line))
             except UnicodeDecodeError as e:
                 print(e)
 
@@ -131,14 +131,6 @@ class PrepareData():
         f.close()
         self.__overall_line_number = agr_lines + dis_lines + none_lines
         return agr_lines, dis_lines, none_lines
-
-    def isEnglish(self, s) -> bool:
-        try:
-            s.encode(encoding='utf-8').decode('ascii')
-        except UnicodeDecodeError:
-            return False
-        else:
-            return True
 
     def __check_idx_matrix_occurance(self) -> None:
         """Checks if any idx matrix exists"""
