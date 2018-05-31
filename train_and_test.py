@@ -32,7 +32,7 @@ class PrepareData():
     def clean_string(string: str) -> str:
         """Cleans messages from punctuation and mentions"""
 
-        ascii_letters = 'abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        ascii_letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ '-1234567890"
         seperator = " < - > "
         cleaned_string = ''
         cut_sentence_until = int(config.maxSeqLength/2) - int(len(seperator)/2)
